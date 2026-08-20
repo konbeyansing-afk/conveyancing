@@ -10,7 +10,12 @@ import {
   type Dispatch,
   type ReactNode,
 } from "react";
-import { createPexaSeedState, PEXA_TODAY, PEXA_USER } from "./seed";
+import {
+  createPexaSeedState,
+  PEXA_FEE_NSW_FINANCIAL,
+  PEXA_TODAY,
+  PEXA_USER,
+} from "./seed";
 import type {
   FundsDirection,
   PexaDocument,
@@ -39,6 +44,7 @@ export type PexaAction =
   | { type: "CLOSE_WORKSPACE" }
   | { type: "SET_TAB"; tab: PexaTab }
   | { type: "OPEN_CREATE_WORKSPACE" }
+  | { type: "OPEN_REFERENCE" }
   | { type: "CREATE_WORKSPACE"; draft: NewWorkspaceDraft }
   | {
       type: "INVITE_PARTICIPANT";
@@ -127,6 +133,9 @@ function pexaReducer(state: PexaState, action: PexaAction): PexaState {
     case "OPEN_CREATE_WORKSPACE":
       return { ...state, nav: { ...state.nav, screen: "create-workspace" } };
 
+    case "OPEN_REFERENCE":
+      return { ...state, nav: { ...state.nav, screen: "reference" } };
+
     case "CREATE_WORKSPACE": {
       const d = action.draft;
       const highest = state.workspaces.reduce(
@@ -166,7 +175,7 @@ function pexaReducer(state: PexaState, action: PexaAction): PexaState {
                 direction: "Destination",
                 category: "PEXA fee",
                 description: "PEXA transaction fee",
-                amount: 130.9,
+                amount: PEXA_FEE_NSW_FINANCIAL,
                 locked: true,
               },
             ]

@@ -14,6 +14,15 @@ export const PEXA_USER = {
   subscriber: "Cremorne Conveyancing",
 };
 
+/**
+ * PEXA transaction service fee, NSW, transfer with financial settlement,
+ * single title — $146.30 including GST, effective 1 July 2026
+ * (pexa.com.au/pricing/nsw). Lodgement-only transfers are cheaper, and other
+ * jurisdictions differ. Treat as an indicative training figure and read the
+ * real fee off the workspace fee schedule.
+ */
+export const PEXA_FEE_NSW_FINANCIAL = 146.3;
+
 /** Other firms and lenders that can be invited into a workspace. */
 export const SUBSCRIBERS = [
   "Harrowgate Legal",
@@ -91,8 +100,8 @@ const workspaces: PexaWorkspace[] = [
         id: "f-1c",
         direction: "Destination",
         category: "PEXA fee",
-        description: "PEXA transaction fee",
-        amount: 130.9,
+        description: "PEXA transaction fee — NSW, with financial settlement",
+        amount: 146.3,
         locked: true,
       },
     ],
@@ -184,8 +193,8 @@ const workspaces: PexaWorkspace[] = [
         id: "f-2d",
         direction: "Destination",
         category: "PEXA fee",
-        description: "PEXA transaction fee",
-        amount: 130.9,
+        description: "PEXA transaction fee — NSW, with financial settlement",
+        amount: 146.3,
         locked: true,
       },
       // Deliberately short — the schedule does not balance yet, which is what
@@ -195,7 +204,7 @@ const workspaces: PexaWorkspace[] = [
         direction: "Destination",
         category: "Vendor proceeds",
         description: "Balance to vendor",
-        amount: 389919.1,
+        amount: 389903.7,
         locked: false,
       },
     ],

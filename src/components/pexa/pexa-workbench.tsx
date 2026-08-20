@@ -10,6 +10,7 @@ import { PEXA_GUIDED_TASKS } from "@/lib/pexa/guided-tasks";
 import { PexaProvider, usePexa } from "@/lib/pexa/store";
 import { TaskRunnerProvider } from "@/lib/training/runner";
 import { cn } from "@/lib/utils";
+import { PexaReference } from "./pexa-reference";
 import { PexaCreateWorkspace, PexaDashboard, PexaWorkspaceScreen } from "./pexa-screens";
 
 function ScreenSwitch() {
@@ -19,6 +20,8 @@ function ScreenSwitch() {
       return <PexaWorkspaceScreen />;
     case "create-workspace":
       return <PexaCreateWorkspace />;
+    case "reference":
+      return <PexaReference />;
     default:
       return <PexaDashboard />;
   }
@@ -37,7 +40,14 @@ function PexaTopBar() {
         PEXA
       </button>
       <span className="text-[12px] text-white/60">Exchange</span>
-      <div className="ml-auto flex items-center gap-3 text-[12px] text-white/80">
+      <button
+        type="button"
+        onClick={() => dispatch({ type: "OPEN_REFERENCE" })}
+        className="ml-auto text-[12px] text-white/75 hover:text-white"
+      >
+        Reference
+      </button>
+      <div className="flex items-center gap-3 text-[12px] text-white/80">
         <span>{state.user.subscriber}</span>
         <span className="grid size-6 place-items-center rounded-full bg-[#00b0b9] text-[10px] font-bold text-white">
           {state.user.name
