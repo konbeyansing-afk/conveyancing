@@ -1,12 +1,11 @@
 "use client";
 
 /**
- * The guided-task side panel.
+ * The guided-task side panel, shared by every simulator.
  *
- * This is the training layer that sits beside the simulated app: it hands the
- * trainee a realistic instruction, watches the simulator's action log to see
- * whether they actually did it, and asks the "why" questions the log can't
- * check on its own.
+ * It hands the trainee a realistic instruction, watches the simulator's state
+ * to see whether they actually did it, and asks the "why" questions that a
+ * state check can't answer on its own.
  */
 
 import { useMemo, useState } from "react";
@@ -23,11 +22,15 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { GUIDED_TASKS, getGuidedTask, type GuidedTask } from "@/lib/simulator/guided-tasks";
-import { useSim, useStepWatcher, useTaskRunner } from "@/lib/simulator/store";
+import {
+  useStepWatcher,
+  useTaskRunner,
+  type GuidedAnswerStep,
+  type GuidedTask,
+} from "@/lib/training/runner";
 import { cn } from "@/lib/utils";
 
-function difficultyTone(d: GuidedTask["difficulty"]) {
+function difficultyTone(d: GuidedTask<unknown>["difficulty"]) {
   switch (d) {
     case "Beginner":
       return "bg-success/12 text-success border-success/25";
@@ -42,7 +45,7 @@ function difficultyTone(d: GuidedTask["difficulty"]) {
 /* Task picker                                                         */
 /* ------------------------------------------------------------------ */
 
-function TaskPicker() {
+function TaskPicker<TState>({ tasks, intro }: { tasks: GuidedTask<TState>[]; intro: string }) {
   const { startTask } = useTaskRunner();
   return (
     <div className="grid gap-3">
@@ -51,14 +54,11 @@ function TaskPicker() {
           <ListChecks className="size-4 text-primary" />
           Guided tasks
         </h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Pick a scenario. You&apos;ll get a realistic instruction, then do the work in the system on
-          the left — each step is checked as you go.
-        </p>
+        <p className="mt-1 text-xs text-muted-foreground">{intro}</p>
       </div>
 
       <div className="grid gap-2">
-        {GUIDED_TASKS.map((task) => (
+        {tasks.map((task) => (
           <button
             key={task.id}
             type="button"
@@ -105,7 +105,7 @@ function AnswerStep({
   done,
   onCorrect,
 }: {
-  step: Extract<GuidedTask["steps"][number], { kind: "answer" }>;
+  step: GuidedAnswerStep;
   done: boolean;
   onCorrect: () => void;
 }) {
@@ -154,22 +154,31 @@ function AnswerStep({
               : "border-warning/30 bg-warning/8 text-foreground",
           )}
         >
-          {done ? step.explanation : "Not quite — have another look at the file and try again."}
+          {done ? step.explanation : "Not quite — have another look and try again."}
         </p>
       )}
     </div>
   );
 }
 
-function RunningTask({ task }: { task: GuidedTask }) {
+function RunningTask<TState>({
+  task,
+  state,
+  actionCount,
+  footnote,
+}: {
+  task: GuidedTask<TState>;
+  state: TState;
+  actionCount: number;
+  footnote: string;
+}) {
   const { run, stopTask, markStepsDone, revealHint, startTask } = useTaskRunner();
-  const { state } = useSim();
 
   const checks = useMemo(
     () => task.steps.map((s) => (s.kind === "action" ? s.check : () => false)),
     [task],
   );
-  useStepWatcher(checks);
+  useStepWatcher(checks, state);
 
   if (!run) return null;
 
@@ -212,7 +221,6 @@ function RunningTask({ task }: { task: GuidedTask }) {
         </div>
       </div>
 
-      {/* Progress */}
       <div>
         <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
           <span>
@@ -228,7 +236,6 @@ function RunningTask({ task }: { task: GuidedTask }) {
         </div>
       </div>
 
-      {/* Steps */}
       <ol className="grid gap-2">
         {task.steps.map((step, i) => {
           const done = run.stepStatus[i] === "done";
@@ -340,12 +347,9 @@ function RunningTask({ task }: { task: GuidedTask }) {
         </div>
       )}
 
-      <p className="text-[11px] text-muted-foreground">
-        Everything you do in the simulator stays in the simulator — nothing here touches a real file.
-        Reset the data any time with the button in the header.
-      </p>
-      {state.log.length > 0 && (
-        <p className="text-[10px] text-muted-foreground/70">{state.log.length} actions recorded</p>
+      <p className="text-[11px] text-muted-foreground">{footnote}</p>
+      {actionCount > 0 && (
+        <p className="text-[10px] text-muted-foreground/70">{actionCount} actions recorded</p>
       )}
     </div>
   );
@@ -355,9 +359,24 @@ function RunningTask({ task }: { task: GuidedTask }) {
 /* Panel shell                                                         */
 /* ------------------------------------------------------------------ */
 
-export function TaskPanel({ onClose }: { onClose?: () => void }) {
+export function TaskPanel<TState>({
+  tasks,
+  state,
+  actionCount,
+  intro,
+  footnote,
+  onClose,
+}: {
+  tasks: GuidedTask<TState>[];
+  state: TState;
+  /** Number of logged actions, shown as a small progress hint. */
+  actionCount: number;
+  intro: string;
+  footnote: string;
+  onClose?: () => void;
+}) {
   const { run } = useTaskRunner();
-  const task = run ? getGuidedTask(run.taskId) : undefined;
+  const task = run ? tasks.find((t) => t.id === run.taskId) : undefined;
 
   return (
     <aside className="flex w-[330px] shrink-0 flex-col border-l border-border bg-background">
@@ -377,7 +396,16 @@ export function TaskPanel({ onClose }: { onClose?: () => void }) {
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-3">
-        {task ? <RunningTask task={task} /> : <TaskPicker />}
+        {task ? (
+          <RunningTask
+            task={task}
+            state={state}
+            actionCount={actionCount}
+            footnote={footnote}
+          />
+        ) : (
+          <TaskPicker tasks={tasks} intro={intro} />
+        )}
       </div>
     </aside>
   );

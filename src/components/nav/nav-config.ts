@@ -8,6 +8,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Library,
+  Landmark,
   MonitorSmartphone,
   Route,
   Users,
@@ -41,6 +42,7 @@ export const traineeNav: NavItem[] = [
   { title: "Resource Library", url: "/app/resources", icon: Library },
   { title: "Settlement Calculator", url: "/app/tools/settlement-calculator", icon: Calculator },
   { title: "Practice System", url: "/app/tools/practice-system", icon: MonitorSmartphone },
+  { title: "PEXA Simulator", url: "/app/tools/pexa", icon: Landmark },
 ];
 
 export type NavKey = "admin" | "trainer" | "trainee";

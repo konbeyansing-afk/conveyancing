@@ -11,41 +11,11 @@
  *    the "do you understand why" half of the training.
  */
 
+import type { GuidedTask } from "@/lib/training/runner";
 import type { SimLogEntry, SimState } from "./types";
 
-export type GuidedStepBase = {
-  instruction: string;
-  hint: string;
-};
-
-export type GuidedActionStep = GuidedStepBase & {
-  kind: "action";
-  check: (state: SimState) => boolean;
-};
-
-export type GuidedAnswerStep = GuidedStepBase & {
-  kind: "answer";
-  question: string;
-  options: string[];
-  correct: number;
-  /** Shown once the trainee answers, right or wrong. */
-  explanation: string;
-};
-
-export type GuidedStep = GuidedActionStep | GuidedAnswerStep;
-
-export type GuidedTask = {
-  id: string;
-  title: string;
-  /** One-line summary for the task list. */
-  summary: string;
-  difficulty: "Beginner" | "Core" | "Advanced";
-  minutes: number;
-  /** Realistic instruction as it would arrive from a fee earner. */
-  brief: string;
-  skills: string[];
-  steps: GuidedStep[];
-};
+/** A scenario that runs against the practice-management simulator. */
+export type SimGuidedTask = GuidedTask<SimState>;
 
 /* ------------------------------------------------------------------ */
 /* Log helpers                                                         */
@@ -85,7 +55,7 @@ const RAGHUNATHAN = "m-4176";
 /** The Renshaw enquiry, used by the lead-conversion scenario. */
 const RENSHAW_LEAD = "l-1";
 
-export const GUIDED_TASKS: GuidedTask[] = [
+export const GUIDED_TASKS: SimGuidedTask[] = [
   {
     id: "gt-find-settlement",
     title: "Find the settlement date on a file",
@@ -723,6 +693,6 @@ export const GUIDED_TASKS: GuidedTask[] = [
   },
 ];
 
-export function getGuidedTask(id: string): GuidedTask | undefined {
+export function getGuidedTask(id: string): SimGuidedTask | undefined {
   return GUIDED_TASKS.find((t) => t.id === id);
 }

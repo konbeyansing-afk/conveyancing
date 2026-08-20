@@ -5,13 +5,15 @@
 import { useState } from "react";
 import { Maximize2, Minimize2, PanelRightOpen, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SimulatorProvider, TaskRunnerProvider, useSim } from "@/lib/simulator/store";
+import { GUIDED_TASKS } from "@/lib/simulator/guided-tasks";
+import { SimulatorProvider, useSim } from "@/lib/simulator/store";
+import { TaskRunnerProvider } from "@/lib/training/runner";
+import { TaskPanel } from "@/components/training/task-panel";
 import { cn } from "@/lib/utils";
 import { CreateMatterScreen } from "./screens/create-matter-screen";
 import { CreateLeadScreen, LeadScreen } from "./screens/lead-screens";
 import { HomeScreen } from "./screens/home-screen";
 import { MatterScreen } from "./screens/matter-screen";
-import { TaskPanel } from "./task-panel";
 
 function ScreenSwitch() {
   const { state } = useSim();
@@ -71,6 +73,21 @@ function WorkbenchToolbar({
   );
 }
 
+/** Feeds practice-management state into the shared training panel. */
+function SimTaskPanel({ onClose }: { onClose: () => void }) {
+  const { state } = useSim();
+  return (
+    <TaskPanel
+      tasks={GUIDED_TASKS}
+      state={state}
+      actionCount={state.log.length}
+      intro="Pick a scenario. You'll get a realistic instruction, then do the work in the system on the left — each step is checked as you go."
+      footnote="Everything you do in the simulator stays in the simulator — nothing here touches a real file. Reset the data any time with the button in the header."
+      onClose={onClose}
+    />
+  );
+}
+
 function WorkbenchInner() {
   const [panelOpen, setPanelOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
@@ -94,7 +111,7 @@ function WorkbenchInner() {
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <ScreenSwitch />
         </div>
-        {panelOpen && <TaskPanel onClose={() => setPanelOpen(false)} />}
+        {panelOpen && <SimTaskPanel onClose={() => setPanelOpen(false)} />}
       </div>
     </div>
   );
