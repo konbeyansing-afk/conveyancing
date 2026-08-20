@@ -1,0 +1,244 @@
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+
+/**
+ * A course is published either through its new Stage (real content) or, for the one
+ * legacy course that predates the Stage system, through its old Program directly.
+ */
+export function isCoursePublished(course: {
+  isPublished: boolean;
+  program: { isPublished: boolean };
+  stage: { isPublished: boolean; program: { isPublished: boolean } } | null;
+}): boolean {
+  if (!course.isPublished) return false;
+  if (course.stage) return course.stage.isPublished && course.stage.program.isPublished;
+  return course.program.isPublished;
+}
+
+export async function isStageComplete(stageId: string, userId: string): Promise<boolean> {
+  const stage = await prisma.stage.findUnique({
+    where: { id: stageId },
+    select: {
+      requireAllLessons: true,
+      requireQuizPass: true,
+      requireTrainerApproval: true,
+      gatingQuizId: true,
+      minQuizScore: true,
+      courses: {
+        select: {
+          modules: {
+            select: { lessons: { where: { isPublished: true }, select: { id: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!stage) return false;
+
+  if (stage.requireAllLessons) {
+    const lessonIds = stage.courses.flatMap((c) => c.modules.flatMap((m) => m.lessons.map((l) => l.id)));
+    // A stage with no published lessons yet (an empty placeholder) can never vacuously complete.
+    if (lessonIds.length === 0) return false;
+    const completedCount = await prisma.lessonProgress.count({
+      where: { userId, lessonId: { in: lessonIds }, completedAt: { not: null } },
+    });
+    if (completedCount < lessonIds.length) return false;
+  }
+
+  if (stage.requireQuizPass) {
+    if (!stage.gatingQuizId) return false;
+    const attempt = await prisma.quizAttempt.findFirst({
+      where: { quizId: stage.gatingQuizId, userId, score: { gte: stage.minQuizScore ?? 0 } },
+      select: { id: true },
+    });
+    if (!attempt) return false;
+  }
+
+  if (stage.requireTrainerApproval) {
+    const approval = await prisma.stageApproval.findUnique({
+      where: { stageId_userId: { stageId, userId } },
+      select: { id: true },
+    });
+    if (!approval) return false;
+  }
+
+  return true;
+}
+
+/** Single-level check per the gating rule: a stage is unlocked once its immediate prerequisite is complete. */
+export async function isStageUnlockedForUser(stageId: string, userId: string): Promise<boolean> {
+  const stage = await prisma.stage.findUnique({
+    where: { id: stageId },
+    select: { prerequisiteStageId: true },
+  });
+  if (!stage) return false;
+  if (!stage.prerequisiteStageId) return true;
+  return isStageComplete(stage.prerequisiteStageId, userId);
+}
+
+/** Session-derived, mirrors isEnrolledInCourse's signature style. */
+export async function isEnrolledInProgram(programId: string): Promise<boolean> {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId) return false;
+  const count = await prisma.enrollment.count({
+    where: { userId, course: { stage: { programId } } },
+  });
+  return count > 0;
+}
+
+/**
+ * First not-yet-completed published lesson within a stage, for a "continue where you left off" CTA.
+ * Only considers courses the trainee is actually enrolled in — access is enrollment-gated
+ * (see isEnrolledInCourse), so a lesson in a stage-unlocked-but-not-enrolled course would 404.
+ */
+export async function getNextLessonHrefForStage(stageId: string, userId: string): Promise<string | null> {
+  const [courses, enrollments] = await Promise.all([
+    prisma.course.findMany({
+      where: { stageId },
+      orderBy: { order: "asc" },
+      include: {
+        modules: {
+          orderBy: { order: "asc" },
+          include: { lessons: { where: { isPublished: true }, orderBy: { order: "asc" }, select: { id: true } } },
+        },
+      },
+    }),
+    prisma.enrollment.findMany({ where: { userId, course: { stageId } }, select: { courseId: true } }),
+  ]);
+  const enrolledCourseIds = new Set(enrollments.map((e) => e.courseId));
+  const enrolledCourses = courses.filter((c) => enrolledCourseIds.has(c.id));
+
+  const lessonIds = enrolledCourses.flatMap((c) => c.modules.flatMap((m) => m.lessons.map((l) => l.id)));
+  const completed = lessonIds.length
+    ? await prisma.lessonProgress.findMany({
+        where: { userId, lessonId: { in: lessonIds }, completedAt: { not: null } },
+        select: { lessonId: true },
+      })
+    : [];
+  const completedSet = new Set(completed.map((p) => p.lessonId));
+
+  for (const course of enrolledCourses) {
+    for (const mod of course.modules) {
+      for (const lesson of mod.lessons) {
+        if (!completedSet.has(lesson.id)) return `/app/courses/${course.id}/lessons/${lesson.id}`;
+      }
+    }
+  }
+  return null;
+}
+
+export type StageJourneyStatus = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  order: number;
+  isPublished: boolean;
+  status: "completed" | "current" | "locked";
+  totalLessons: number;
+  completedLessons: number;
+  progressPercent: number;
+  prerequisiteStageId: string | null;
+  prerequisiteStageTitle: string | null;
+  requireAllLessons: boolean;
+  requireQuizPass: boolean;
+  requireTrainerApproval: boolean;
+  courses: { id: string; title: string }[];
+  programCoverImageUrl: string | null;
+};
+
+/** Computes the full 9-stage journey for a user in a fixed small number of queries (no N+1). */
+export async function getJourneyForUser(programId: string, userId: string): Promise<StageJourneyStatus[]> {
+  const stages = await prisma.stage.findMany({
+    where: { programId },
+    orderBy: { order: "asc" },
+    include: {
+      prerequisiteStage: { select: { id: true, title: true } },
+      program: { select: { coverImageUrl: true } },
+      courses: {
+        orderBy: { order: "asc" },
+        select: {
+          id: true,
+          title: true,
+          modules: {
+            select: { lessons: { where: { isPublished: true }, select: { id: true } } },
+          },
+        },
+      },
+    },
+  });
+
+  const allLessonIds = stages.flatMap((s) =>
+    s.courses.flatMap((c) => c.modules.flatMap((m) => m.lessons.map((l) => l.id)))
+  );
+  const completedProgress = allLessonIds.length
+    ? await prisma.lessonProgress.findMany({
+        where: { userId, lessonId: { in: allLessonIds }, completedAt: { not: null } },
+        select: { lessonId: true },
+      })
+    : [];
+  const completedLessonIds = new Set(completedProgress.map((p) => p.lessonId));
+
+  const approvals = await prisma.stageApproval.findMany({
+    where: { userId, stageId: { in: stages.map((s) => s.id) } },
+    select: { stageId: true },
+  });
+  const approvedStageIds = new Set(approvals.map((a) => a.stageId));
+
+  const gatingQuizIds = stages.map((s) => s.gatingQuizId).filter((id): id is string => !!id);
+  const quizAttempts = gatingQuizIds.length
+    ? await prisma.quizAttempt.findMany({
+        where: { userId, quizId: { in: gatingQuizIds } },
+        select: { quizId: true, score: true },
+      })
+    : [];
+
+  const completionByStageId = new Map<string, boolean>();
+  for (const stage of stages) {
+    const lessonIds = stage.courses.flatMap((c) => c.modules.flatMap((m) => m.lessons.map((l) => l.id)));
+    let complete = true;
+    if (stage.requireAllLessons) {
+      complete = complete && lessonIds.length > 0 && lessonIds.every((id) => completedLessonIds.has(id));
+    }
+    if (stage.requireQuizPass) {
+      const passed = stage.gatingQuizId
+        ? quizAttempts.some((a) => a.quizId === stage.gatingQuizId && a.score >= (stage.minQuizScore ?? 0))
+        : false;
+      complete = complete && passed;
+    }
+    if (stage.requireTrainerApproval) {
+      complete = complete && approvedStageIds.has(stage.id);
+    }
+    completionByStageId.set(stage.id, complete);
+  }
+
+  return stages.map((stage) => {
+    const lessonIds = stage.courses.flatMap((c) => c.modules.flatMap((m) => m.lessons.map((l) => l.id)));
+    const completedCount = lessonIds.filter((id) => completedLessonIds.has(id)).length;
+    const isComplete = completionByStageId.get(stage.id) ?? false;
+    const unlocked = !stage.prerequisiteStageId || (completionByStageId.get(stage.prerequisiteStageId) ?? false);
+
+    const status: "completed" | "current" | "locked" = isComplete ? "completed" : unlocked ? "current" : "locked";
+
+    return {
+      id: stage.id,
+      slug: stage.slug,
+      title: stage.title,
+      description: stage.description,
+      order: stage.order,
+      isPublished: stage.isPublished,
+      status,
+      totalLessons: lessonIds.length,
+      completedLessons: completedCount,
+      progressPercent: lessonIds.length > 0 ? Math.round((completedCount / lessonIds.length) * 100) : 0,
+      prerequisiteStageId: stage.prerequisiteStageId,
+      prerequisiteStageTitle: stage.prerequisiteStage?.title ?? null,
+      requireAllLessons: stage.requireAllLessons,
+      requireQuizPass: stage.requireQuizPass,
+      requireTrainerApproval: stage.requireTrainerApproval,
+      courses: stage.courses.map((c) => ({ id: c.id, title: c.title })),
+      programCoverImageUrl: stage.program.coverImageUrl,
+    };
+  });
+}
