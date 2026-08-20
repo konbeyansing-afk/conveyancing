@@ -82,6 +82,8 @@ function visitedTab(state: SimState, matterId: string, tab: string): boolean {
 /** The Beltran purchase — the file most scenarios run on. */
 const BELTRAN = "m-4182";
 const RAGHUNATHAN = "m-4176";
+/** The Renshaw enquiry, used by the lead-conversion scenario. */
+const RENSHAW_LEAD = "l-1";
 
 export const GUIDED_TASKS: GuidedTask[] = [
   {
@@ -430,6 +432,292 @@ export const GUIDED_TASKS: GuidedTask[] = [
         instruction: "Open the matter that urgent task belongs to.",
         hint: "It is the Raghunathan sale, matter 004176.",
         check: (s) => opened(s, RAGHUNATHAN),
+      },
+    ],
+  },
+
+  {
+    id: "gt-phone-message",
+    title: "Take a phone message and action it",
+    summary: "Capture a call for someone else, put it on the right file, and leave a task behind.",
+    difficulty: "Beginner",
+    minutes: 6,
+    brief:
+      "Jennie is in a settlement and can't take calls. Marcus Delacourt from Delacourt & Vine rings about the Raghunathan sale — he still hasn't received our adjustment figures and settlement is 27 August. He asks someone to call him back today. Take the message and make sure it doesn't get lost.",
+    skills: ["Phone messages", "Task management", "Escalation"],
+    steps: [
+      {
+        kind: "action",
+        instruction:
+          "Record the phone message, noting who called and what they need.",
+        hint: "PHONE MESSAGE on the ribbon. Put the caller's name in, and say what they want in the message body.",
+        check: (s) =>
+          logs(s, "phone-message.add").some((l) =>
+            mentionsAny(`${str(l.detail.caller)} ${str(l.detail.summary)}`, [
+              "delacourt",
+              "marcus",
+              "adjustment",
+              "figures",
+            ]),
+          ),
+      },
+      {
+        kind: "action",
+        instruction: "Open the Raghunathan sale (matter 004176).",
+        hint: "Matters in the left rail, then the 004176 row.",
+        check: (s) => opened(s, RAGHUNATHAN),
+      },
+      {
+        kind: "action",
+        instruction:
+          "Add a task on that matter so the adjustment figures actually get sent.",
+        hint: "TASKS tab, type the task and press ADD. Mention the figures or the adjustments.",
+        check: (s) =>
+          logs(s, "task.add").some(
+            (l) =>
+              l.matterId === RAGHUNATHAN &&
+              mentionsAny(str(l.detail.name), ["figure", "adjustment", "settlement statement"]),
+          ),
+      },
+      {
+        kind: "answer",
+        instruction: "Check what you should not have done on that call.",
+        hint: "Think about the limits of a VA's role on a live file.",
+        question:
+          "Marcus asked you directly whether our client will agree to settle a day early. What is the right response?",
+        options: [
+          "Tell him yes — the client mentioned being flexible last week",
+          "Tell him no, since changing settlement is usually difficult",
+          "Take the question down, tell him it needs to come from the fee earner, and flag it",
+          "Ask him to email the client directly",
+        ],
+        correct: 2,
+        explanation:
+          "A VA records and routes; they don't give the other side a position on the client's behalf. Even a casual \"I think that's fine\" can be treated as agreement. Take it down, say it has to come from the fee earner, and escalate it.",
+      },
+    ],
+  },
+
+  {
+    id: "gt-convert-lead",
+    title: "Convert a lead into a matter",
+    summary: "Turn a prospect who has retained the firm into a live file, without inheriting unfinished compliance.",
+    difficulty: "Core",
+    minutes: 6,
+    brief:
+      "Tobias Renshaw rang last week about a purchase at 9 Larkspur Way, Rouse Hill. He has now signed the contract and paid the deposit — he's retained the firm. Convert the lead so the work can start.",
+    skills: ["Leads", "Lead conversion", "AML awareness"],
+    steps: [
+      {
+        kind: "action",
+        instruction: "Open the Renshaw lead.",
+        hint: "Matters in the left rail — the Leads folder sits at the top of the tree.",
+        check: (s) =>
+          logs(s, "lead.open").some((l) => l.detail.leadId === RENSHAW_LEAD) ||
+          logs(s, "lead.convert").some((l) => l.detail.leadId === RENSHAW_LEAD),
+      },
+      {
+        kind: "action",
+        instruction: "Convert the lead to a matter.",
+        hint: "Use the green CONVERT TO MATTER bar across the top of the lead.",
+        check: (s) =>
+          logs(s, "lead.convert").some((l) => mentionsAny(str(l.detail.clientName), ["renshaw"])),
+      },
+      {
+        kind: "answer",
+        instruction: "Check what the new matter inherited.",
+        hint: "Look at the AML & VOI badge on the new matter's details.",
+        question:
+          "After converting, what is the AML/VOI status on the new matter, and why?",
+        options: [
+          "Complete — the lead was already vetted when it was created",
+          "Incomplete — converting never carries across a verification that was never performed",
+          "Complete — converting a lead automatically verifies the client",
+          "Not applicable — AML only applies to sales, not purchases",
+        ],
+        correct: 1,
+        explanation:
+          "A lead is an enquiry, not a verified client. Conversion deliberately resets AML and the risk rating so nobody assumes identity checks were done. Verifying Tobias is now a real task on the new file.",
+      },
+    ],
+  },
+
+  {
+    id: "gt-apply-workflow",
+    title: "Apply the firm's workflow to a matter",
+    summary: "Drop the standard task list onto a file and understand how due dates are calculated.",
+    difficulty: "Core",
+    minutes: 6,
+    brief:
+      "A sale file has been opened but has no tasks on it. Apply the firm's standard NSW Sale workflow so nothing gets missed, then check the dates make sense.",
+    skills: ["Workflows", "Critical dates", "Task management"],
+    steps: [
+      {
+        kind: "action",
+        instruction: "Open the Raghunathan sale (matter 004176) and go to the TASKS tab.",
+        hint: "Matters → 004176 → TASKS.",
+        check: (s) => visitedTab(s, RAGHUNATHAN, "tasks"),
+      },
+      {
+        kind: "action",
+        instruction: "Apply the NSW Sale workflow to the matter.",
+        hint: "APPLY WORKFLOW on the ribbon, pick NSW Sale, then APPLY WORKFLOW in the dialog.",
+        check: (s) =>
+          logs(s, "workflow.apply").some(
+            (l) => l.matterId === RAGHUNATHAN && mentionsAny(str(l.detail.workflow), ["sale"]),
+          ),
+      },
+      {
+        kind: "answer",
+        instruction: "Check you understand how the due dates were set.",
+        hint: "Settlement on this matter is 27 August 2026. The discharge task is due 21 days before settlement.",
+        question:
+          "The workflow set \"Send discharge authority to the lender\" to 6 August 2026. Where did that date come from?",
+        options: [
+          "It is 21 days after the matter was opened",
+          "It is a fixed date the firm uses for every sale",
+          "It is 21 days before the 27 August settlement date on this matter",
+          "It is the date the workflow was applied",
+        ],
+        correct: 2,
+        explanation:
+          "Workflow tasks are dated relative to a critical date, not fixed. If settlement moves, the dates that hang off it are wrong until the workflow is reapplied or the tasks are adjusted — always re-check dates after a settlement change.",
+      },
+    ],
+  },
+
+  {
+    id: "gt-fix-matter-details",
+    title: "Correct wrong details on a file",
+    summary: "Open the Matter Info window, fix an error, and understand why the change is logged.",
+    difficulty: "Core",
+    minutes: 5,
+    brief:
+      "The fee earner has noticed that the Beltran file has the wrong person responsible on it — it should be Jennie Tonner, and correspondence is going out with the wrong name. Fix it on the file.",
+    skills: ["Matter Info window", "Data accuracy", "Audit trail"],
+    steps: [
+      {
+        kind: "action",
+        instruction: "Open matter 004182 and open the Info row in Matter Details.",
+        hint: "Click the Info row at the top of Matter Details — it opens the Matter Info window.",
+        check: (s) => opened(s, BELTRAN),
+      },
+      {
+        kind: "action",
+        instruction: "Update the matter and save it with OK.",
+        hint: "Change Person Responsible, then press OK at the bottom of the window.",
+        check: (s) => logs(s, "matter.update").some((l) => l.matterId === BELTRAN),
+      },
+      {
+        kind: "answer",
+        instruction: "Check what happened when you pressed OK.",
+        hint: "Have a look at the ACTIVITY tab on the matter afterwards.",
+        question: "What else happened when you saved that change?",
+        options: [
+          "Nothing — field edits are silent",
+          "The change was written to the matter's Activity as a Matter Administration entry",
+          "The client was automatically emailed about the change",
+          "The previous value was permanently deleted with no record",
+        ],
+        correct: 1,
+        explanation:
+          "Edits are recorded on the file's Activity. That audit trail is why you should fix data properly in the system rather than working around it — someone can always see what changed and when.",
+      },
+    ],
+  },
+
+  {
+    id: "gt-client-email",
+    title: "Send a client update email",
+    summary: "Write a clear update to a client and stay inside a VA's role.",
+    difficulty: "Core",
+    minutes: 7,
+    brief:
+      "Amara Beltran has emailed asking where things are up to. Searches are back, the contract is exchanged, and settlement is 4 September. Send her an update from the file. She has also asked whether she should waive the finance condition — do not answer that yourself.",
+    skills: ["Client communication", "Emails", "Scope of a VA's role"],
+    steps: [
+      {
+        kind: "action",
+        instruction: "Open matter 004182 and go to the EMAILS tab.",
+        hint: "Read her email first so your reply actually answers her.",
+        check: (s) => visitedTab(s, BELTRAN, "emails"),
+      },
+      {
+        kind: "action",
+        instruction:
+          "Send her an update mentioning the settlement date. Do not answer the finance question.",
+        hint: "EMAIL on the ribbon opens the composer. Mention settlement or the 4 September date.",
+        check: (s) =>
+          logs(s, "email.send").some(
+            (l) =>
+              l.matterId === BELTRAN &&
+              mentionsAny(`${str(l.detail.subject)} ${str(l.detail.body)}`, [
+                "settlement",
+                "4 september",
+                "september",
+              ]),
+          ),
+      },
+      {
+        kind: "answer",
+        instruction: "Check how you handled the finance question.",
+        hint: "Waiving a finance condition is a decision with real consequences if the loan falls through.",
+        question: "How should the finance-condition question be handled in your email?",
+        options: [
+          "Explain the pros and cons so she can decide",
+          "Tell her most buyers waive it, so she probably should too",
+          "Say the fee earner will advise on that, and flag it to them",
+          "Ignore it — if it matters she will ask again",
+        ],
+        correct: 2,
+        explanation:
+          "Whether to waive a finance condition is legal advice, and a VA never gives it. Acknowledge the question so the client knows it wasn't missed, say it's coming from the fee earner, and make sure it actually reaches them.",
+      },
+    ],
+  },
+
+  {
+    id: "gt-precedent-letter",
+    title: "Create a letter from a precedent",
+    summary: "Produce a document from the firm's precedent library and record the time it took.",
+    difficulty: "Core",
+    minutes: 6,
+    brief:
+      "The Beltran matter needs the standard post-exchange letter to the client. Produce it from the precedent library rather than writing one from scratch, then record the time.",
+    skills: ["Documents", "Precedents", "Time recording"],
+    steps: [
+      {
+        kind: "action",
+        instruction: "On matter 004182, create a new document from a precedent.",
+        hint: "NEW DOCUMENT on the ribbon, choose a precedent, then CREATE.",
+        check: (s) => logs(s, "document.add").some((l) => l.matterId === BELTRAN),
+      },
+      {
+        kind: "action",
+        instruction: "Record 0.2 hours of billable time against the LETTE activity code for it.",
+        hint: "TIME & DISBURSEMENTS tab, activity LETTE, duration 0.2 with Hrs selected.",
+        check: (s) =>
+          logs(s, "time.add").some(
+            (l) =>
+              l.matterId === BELTRAN &&
+              l.detail.activityCode === "LETTE" &&
+              l.detail.billable === true,
+          ),
+      },
+      {
+        kind: "answer",
+        instruction: "Check why precedents are used.",
+        hint: "Think about what happens across hundreds of files, not just this one.",
+        question: "Why produce the letter from a precedent instead of writing it yourself?",
+        options: [
+          "It is faster, and speed is the only consideration",
+          "Precedents are approved wording — they keep advice consistent and correct across every file, and they update centrally when the law changes",
+          "Precedents cannot be edited, which prevents mistakes",
+          "The system will not let you create documents any other way",
+        ],
+        correct: 1,
+        explanation:
+          "A precedent is the firm's approved wording, reviewed by someone qualified. Free-typing letters is how inconsistent — and sometimes wrong — advice gets out. Adapt the detail, never rewrite the substance.",
       },
     ],
   },
