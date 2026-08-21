@@ -5,7 +5,11 @@ import { StatTile } from "@/components/stat-tile";
 import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import { getJourneyForUser, getNextLessonHrefForStage } from "@/lib/stage-access";
+import {
+  getJourneyForUser,
+  getNextLessonHrefForStage,
+  getPrimaryProgramForUser,
+} from "@/lib/stage-access";
 import { JourneySummaryCard } from "@/components/trainee/journey-summary-card";
 
 export default async function TraineeDashboardPage() {
@@ -14,7 +18,7 @@ export default async function TraineeDashboardPage() {
   const firstName = (session!.user.name ?? "there").split(" ")[0];
 
   const [program, recentCompletions, recentQuizAttempts] = await Promise.all([
-    prisma.program.findFirst({ where: { title: "QLD Conveyancing Training Program" } }),
+    getPrimaryProgramForUser(userId),
     prisma.lessonProgress.findMany({
       where: { userId, completedAt: { not: null } },
       orderBy: { completedAt: "desc" },

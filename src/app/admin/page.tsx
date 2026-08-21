@@ -85,7 +85,14 @@ export default async function AdminDashboardPage() {
     let totalActual = 0;
     const traineeIds = new Set<string>();
     let lessonCount = 0;
-    const allCourses = [...program.courses, ...program.stages.flatMap((s) => s.courses)];
+    // A course reachable through a stage is also reachable through the program's
+    // own `courses` relation, because Course.programId is required. Concatenating
+    // the two relations would count it twice, so dedupe by id.
+    const allCourses = [
+      ...new Map(
+        [...program.courses, ...program.stages.flatMap((s) => s.courses)].map((c) => [c.id, c])
+      ).values(),
+    ];
 
     for (const course of allCourses) {
       const lessonIds = course.modules.flatMap((m) => m.lessons.map((l) => l.id));

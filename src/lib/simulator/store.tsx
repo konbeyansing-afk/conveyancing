@@ -13,10 +13,10 @@ import {
   createContext,
   useContext,
   useMemo,
-  useReducer,
   type Dispatch,
   type ReactNode,
 } from "react";
+import { usePersistentReducer } from "@/lib/training/persist";
 import { createSeedState, SIM_TODAY } from "./seed";
 import type {
   AreaOfLaw,
@@ -239,6 +239,8 @@ export function formatLongDate(iso: string): string {
 export function formatMoney(n: number): string {
   return n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 }
+
+export const STORAGE_KEY = "conveyancing-academy:sim:practice-system";
 
 export function simReducer(state: SimState, action: SimAction): SimState {
   switch (action.type) {
@@ -918,7 +920,7 @@ type SimContextValue = {
 const SimContext = createContext<SimContextValue | null>(null);
 
 export function SimulatorProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(simReducer, undefined, createSeedState);
+  const [state, dispatch] = usePersistentReducer(STORAGE_KEY, simReducer, createSeedState);
   const matter = useMemo(
     () => state.matters.find((m) => m.id === state.nav.matterId) ?? null,
     [state.matters, state.nav.matterId],

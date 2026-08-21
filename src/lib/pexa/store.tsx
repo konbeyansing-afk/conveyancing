@@ -6,10 +6,10 @@ import {
   createContext,
   useContext,
   useMemo,
-  useReducer,
   type Dispatch,
   type ReactNode,
 } from "react";
+import { usePersistentReducer } from "@/lib/training/persist";
 import {
   createPexaSeedState,
   PEXA_FEE_NSW_FINANCIAL,
@@ -109,6 +109,8 @@ export function formatAuDate(iso: string | null): string {
 export function formatMoney(n: number): string {
   return n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 }
+
+export const STORAGE_KEY = "conveyancing-academy:sim:pexa";
 
 export function pexaReducer(state: PexaState, action: PexaAction): PexaState {
   switch (action.type) {
@@ -370,7 +372,7 @@ type PexaContextValue = {
 const PexaContext = createContext<PexaContextValue | null>(null);
 
 export function PexaProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(pexaReducer, undefined, createPexaSeedState);
+  const [state, dispatch] = usePersistentReducer(STORAGE_KEY, pexaReducer, createPexaSeedState);
   const workspace = useMemo(
     () => state.workspaces.find((w) => w.id === state.nav.workspaceId) ?? null,
     [state.workspaces, state.nav.workspaceId],

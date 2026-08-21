@@ -128,6 +128,54 @@ export async function getNextLessonHrefForStage(stageId: string, userId: string)
   return null;
 }
 
+/**
+ * The program whose journey a trainee should be shown.
+ *
+ * Derived from what they are actually enrolled in — a trainee enrolled in
+ * several programs gets the one they have the most courses in, tie-broken by
+ * whichever they were enrolled in first. A trainee with no enrolments yet (a
+ * brand-new hire, or staff previewing) falls back to the first published
+ * program that has a stage structure, so the page still shows the pathway
+ * rather than an empty state.
+ */
+export async function getPrimaryProgramForUser(
+  userId: string
+): Promise<{ id: string; title: string } | null> {
+  const enrollments = await prisma.enrollment.findMany({
+    where: { userId },
+    orderBy: { enrolledAt: "asc" },
+    select: {
+      course: {
+        select: {
+          program: { select: { id: true, title: true } },
+          stage: { select: { program: { select: { id: true, title: true } } } },
+        },
+      },
+    },
+  });
+
+  if (enrollments.length > 0) {
+    const byProgram = new Map<string, { id: string; title: string; count: number; first: number }>();
+    enrollments.forEach((e, index) => {
+      // A course carries both a direct programId and, once it sits in a stage,
+      // that stage's program. Where they disagree the stage is authoritative —
+      // it is the stage hierarchy that defines the training journey.
+      const program = e.course.stage?.program ?? e.course.program;
+      const existing = byProgram.get(program.id);
+      if (existing) existing.count += 1;
+      else byProgram.set(program.id, { ...program, count: 1, first: index });
+    });
+    const best = [...byProgram.values()].sort((a, b) => b.count - a.count || a.first - b.first)[0];
+    return { id: best.id, title: best.title };
+  }
+
+  return prisma.program.findFirst({
+    where: { isPublished: true, stages: { some: {} } },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, title: true },
+  });
+}
+
 export type StageJourneyStatus = {
   id: string;
   slug: string;

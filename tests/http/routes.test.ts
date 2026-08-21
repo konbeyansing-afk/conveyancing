@@ -212,6 +212,31 @@ describeIfUp()("Trainee access", () => {
   });
 });
 
+/** Reads the number shown on a StatCard by finding the value nearest before its label. */
+function statCardValue(html: string, label: string): number | null {
+  const labelAt = html.indexOf(`>${label}<`);
+  if (labelAt === -1) return null;
+  const before = html.slice(0, labelAt);
+  const values = [...before.matchAll(/>(\d+)<\/p>/g)];
+  const last = values.at(-1);
+  return last ? Number(last[1]) : null;
+}
+
+describeIfUp()("Reported figures match the database", () => {
+  it("reports the real number of courses on the Programs page", async () => {
+    // Regression: the page summed a per-program count built by concatenating
+    // program.courses with program.stages[].courses, which counts every
+    // stage-attached course twice.
+    const html = await (await get("/admin/programs", adminCookie)).text();
+    expect(statCardValue(html, "Total courses")).toBe(await prisma.course.count());
+  });
+
+  it("reports the real number of programs on the Programs page", async () => {
+    const html = await (await get("/admin/programs", adminCookie)).text();
+    expect(statCardValue(html, "Total programs")).toBe(await prisma.program.count());
+  });
+});
+
 describeIfUp()("Bad and hostile input", () => {
   const badIds = [
     "does-not-exist",

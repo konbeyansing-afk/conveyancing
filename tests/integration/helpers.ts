@@ -159,7 +159,35 @@ export async function cleanup() {
   createdUserIds.length = 0;
 }
 
-/** Guard used by the suites: refuses to run against a database holding no schema. */
+/**
+ * Removes fixtures stranded by an earlier run that died before its cleanup —
+ * a dropped connection mid-suite, or an interrupted run. Only touches rows
+ * that carry the audit namespace AND are over an hour old, so it can never
+ * interfere with a run happening right now.
+ */
+export async function sweepStaleFixtures() {
+  const cutoff = new Date(Date.now() - 60 * 60 * 1000);
+  await prisma.program.deleteMany({
+    where: { title: { startsWith: AUDIT_PREFIX }, createdAt: { lt: cutoff } },
+  });
+  await prisma.user.deleteMany({
+    where: { email: { endsWith: "@example.test" }, createdAt: { lt: cutoff } },
+  });
+}
+
+/** Guard used by the suites: fails loudly and clearly when the database is unreachable. */
 export async function assertDatabaseReachable() {
-  await prisma.$queryRaw`SELECT 1`;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `The database at DATABASE_URL is not reachable, so the integration tests cannot run.
+` +
+        `This is an environment problem, not a failing assertion.
+` +
+        `Underlying error: ${reason}`
+    );
+  }
+  await sweepStaleFixtures();
 }

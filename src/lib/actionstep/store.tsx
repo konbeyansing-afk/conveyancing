@@ -6,10 +6,10 @@ import {
   createContext,
   useContext,
   useMemo,
-  useReducer,
   type Dispatch,
   type ReactNode,
 } from "react";
+import { usePersistentReducer } from "@/lib/training/persist";
 import { AS_TODAY, AS_USER, createAsSeedState } from "./seed";
 import {
   canLeaveStep,
@@ -97,6 +97,8 @@ export function formatAuDate(iso: string | null): string {
 export function formatMoney(n: number): string {
   return n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 }
+
+export const STORAGE_KEY = "conveyancing-academy:sim:actionstep";
 
 export function asReducer(state: AsState, action: AsAction): AsState {
   switch (action.type) {
@@ -350,7 +352,7 @@ type AsContextValue = {
 const AsContext = createContext<AsContextValue | null>(null);
 
 export function ActionstepProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(asReducer, undefined, createAsSeedState);
+  const [state, dispatch] = usePersistentReducer(STORAGE_KEY, asReducer, createAsSeedState);
   const matter = useMemo(
     () => state.matters.find((m) => m.id === state.nav.matterId) ?? null,
     [state.matters, state.nav.matterId],

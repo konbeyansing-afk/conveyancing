@@ -15,9 +15,9 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
+import { usePersistentReducer } from "@/lib/training/persist";
 
 export type GuidedStepBase = {
   instruction: string;
@@ -74,46 +74,84 @@ type TaskRunnerValue = {
 
 const TaskRunnerContext = createContext<TaskRunnerValue | null>(null);
 
-export function TaskRunnerProvider({ children }: { children: ReactNode }) {
-  const [run, setRun] = useState<TaskRun | null>(null);
+type RunAction =
+  | { type: "start"; taskId: string; stepCount: number }
+  | { type: "stop" }
+  | { type: "markDone"; indexes: number[] }
+  | { type: "revealHint"; index: number }
+  | { type: "finish" };
 
-  const startTask = useCallback((taskId: string, stepCount: number) => {
-    setRun({
-      taskId,
-      stepStatus: Array.from({ length: stepCount }, () => "pending" as StepStatus),
-      hintsUsed: [],
-      finishedAt: null,
-    });
-  }, []);
+function runReducer(run: TaskRun | null, action: RunAction): TaskRun | null {
+  switch (action.type) {
+    case "start":
+      return {
+        taskId: action.taskId,
+        stepStatus: Array.from({ length: action.stepCount }, () => "pending" as StepStatus),
+        hintsUsed: [],
+        finishedAt: null,
+      };
 
-  const stopTask = useCallback(() => setRun(null), []);
+    case "stop":
+      return null;
 
-  const markStepsDone = useCallback((indexes: number[]) => {
-    setRun((prev) => {
-      if (!prev) return prev;
+    case "markDone": {
+      if (!run) return run;
       let changed = false;
-      const next = prev.stepStatus.map((s, i) => {
-        if (indexes.includes(i) && s !== "done") {
+      const next = run.stepStatus.map((s, i) => {
+        if (action.indexes.includes(i) && s !== "done") {
           changed = true;
           return "done" as StepStatus;
         }
         return s;
       });
-      return changed ? { ...prev, stepStatus: next } : prev;
-    });
-  }, []);
+      return changed ? { ...run, stepStatus: next } : run;
+    }
 
-  const revealHint = useCallback((index: number) => {
-    setRun((prev) =>
-      prev && !prev.hintsUsed.includes(index)
-        ? { ...prev, hintsUsed: [...prev.hintsUsed, index] }
-        : prev,
-    );
-  }, []);
+    case "revealHint":
+      if (!run || run.hintsUsed.includes(action.index)) return run;
+      return { ...run, hintsUsed: [...run.hintsUsed, action.index] };
 
-  const finish = useCallback(() => {
-    setRun((prev) => (prev && prev.finishedAt === null ? { ...prev, finishedAt: Date.now() } : prev));
-  }, []);
+    case "finish":
+      if (!run || run.finishedAt !== null) return run;
+      return { ...run, finishedAt: Date.now() };
+
+    default:
+      return run;
+  }
+}
+
+/**
+ * Scenario progress is persisted alongside the simulator's own state, so a
+ * refresh mid-task does not drop the trainee back at the scenario picker.
+ * Each simulator passes its own key so the three never overwrite each other.
+ */
+export function TaskRunnerProvider({
+  children,
+  storageKey = "conveyancing-academy:task:default",
+}: {
+  children: ReactNode;
+  storageKey?: string;
+}) {
+  const [run, dispatch] = usePersistentReducer<TaskRun | null, RunAction>(
+    storageKey,
+    runReducer,
+    () => null,
+  );
+
+  const startTask = useCallback(
+    (taskId: string, stepCount: number) => dispatch({ type: "start", taskId, stepCount }),
+    [dispatch],
+  );
+  const stopTask = useCallback(() => dispatch({ type: "stop" }), [dispatch]);
+  const markStepsDone = useCallback(
+    (indexes: number[]) => dispatch({ type: "markDone", indexes }),
+    [dispatch],
+  );
+  const revealHint = useCallback(
+    (index: number) => dispatch({ type: "revealHint", index }),
+    [dispatch],
+  );
+  const finish = useCallback(() => dispatch({ type: "finish" }), [dispatch]);
 
   const value = useMemo(
     () => ({ run, startTask, stopTask, markStepsDone, revealHint, finish }),

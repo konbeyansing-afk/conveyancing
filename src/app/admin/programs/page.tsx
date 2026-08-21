@@ -37,9 +37,19 @@ export default async function AdminProgramsPage() {
 
   const completedKeys = new Set(completedProgress.map((p) => `${p.userId}:${p.lessonId}`));
 
+  const distinctCourseIds = new Set<string>();
+
   const summaries: ProgramSummary[] = programs.map((program) => {
-    const allCourses = [...program.courses, ...program.stages.flatMap((s) => s.courses)];
+    // A course reachable through a stage is also reachable through the program's
+    // own `courses` relation, because Course.programId is required. Concatenating
+    // the two relations would count it twice, so dedupe by id.
+    const allCourses = [
+      ...new Map(
+        [...program.courses, ...program.stages.flatMap((s) => s.courses)].map((c) => [c.id, c])
+      ).values(),
+    ];
     const courseCount = allCourses.length;
+    for (const course of allCourses) distinctCourseIds.add(course.id);
     const moduleCount = allCourses.reduce((sum, c) => sum + c.modules.length, 0);
     const lessonCount = allCourses.reduce(
       (sum, c) => sum + c.modules.reduce((s, m) => s + m.lessons.length, 0),
@@ -79,7 +89,10 @@ export default async function AdminProgramsPage() {
   });
 
   const publishedCount = summaries.filter((p) => p.isPublished).length;
-  const totalCourses = summaries.reduce((sum, p) => sum + p.courseCount, 0);
+  // Counted across the whole library rather than summed per program: a course
+  // whose programId and whose stage's program disagree belongs to two programs
+  // in the data, and summing would report it twice.
+  const totalCourses = distinctCourseIds.size;
 
   return (
     <div className="grid gap-6">

@@ -1,6 +1,9 @@
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { getJourneyForUser, getNextLessonHrefForStage } from "@/lib/stage-access";
+import {
+  getJourneyForUser,
+  getNextLessonHrefForStage,
+  getPrimaryProgramForUser,
+} from "@/lib/stage-access";
 import { StageTimeline } from "@/components/trainee/stage-timeline";
 import { JourneySummaryCard } from "@/components/trainee/journey-summary-card";
 import { EmptyState } from "@/components/empty-state";
@@ -10,9 +13,7 @@ export default async function TrainingJourneyPage() {
   const session = await auth();
   const userId = session!.user.id;
 
-  const program = await prisma.program.findFirst({
-    where: { title: "QLD Conveyancing Training Program" },
-  });
+  const program = await getPrimaryProgramForUser(userId);
 
   if (!program) {
     return (

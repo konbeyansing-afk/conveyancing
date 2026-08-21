@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { TaskPanel } from "@/components/training/task-panel";
 import { PEXA_GUIDED_TASKS } from "@/lib/pexa/guided-tasks";
 import { PexaProvider, usePexa } from "@/lib/pexa/store";
-import { TaskRunnerProvider } from "@/lib/training/runner";
+import { TaskRunnerProvider, useTaskRunner } from "@/lib/training/runner";
 import { cn } from "@/lib/utils";
 import { PexaReference } from "./pexa-reference";
 import { PexaCreateWorkspace, PexaDashboard, PexaWorkspaceScreen } from "./pexa-screens";
@@ -76,6 +76,7 @@ function PexaTaskPanel({ onClose }: { onClose: () => void }) {
 
 function WorkbenchInner() {
   const { dispatch } = usePexa();
+  const { stopTask } = useTaskRunner();
   const [panelOpen, setPanelOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -94,7 +95,12 @@ function WorkbenchInner() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => dispatch({ type: "RESET" })}
+            onClick={() => {
+            // The running scenario's ticked-off steps describe work that the
+            // reset has just discarded, so drop it too.
+            stopTask();
+            dispatch({ type: "RESET" });
+          }}
             title="Reset the simulator back to its starting data"
           >
             <RotateCcw className="size-3.5" />
@@ -127,7 +133,7 @@ function WorkbenchInner() {
 export function PexaWorkbench() {
   return (
     <PexaProvider>
-      <TaskRunnerProvider>
+      <TaskRunnerProvider storageKey="conveyancing-academy:task:pexa">
         <WorkbenchInner />
       </TaskRunnerProvider>
     </PexaProvider>

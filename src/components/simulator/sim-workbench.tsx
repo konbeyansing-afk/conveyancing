@@ -7,7 +7,7 @@ import { Maximize2, Minimize2, PanelRightOpen, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GUIDED_TASKS } from "@/lib/simulator/guided-tasks";
 import { SimulatorProvider, useSim } from "@/lib/simulator/store";
-import { TaskRunnerProvider } from "@/lib/training/runner";
+import { TaskRunnerProvider, useTaskRunner } from "@/lib/training/runner";
 import { TaskPanel } from "@/components/training/task-panel";
 import { cn } from "@/lib/utils";
 import { CreateMatterScreen } from "./screens/create-matter-screen";
@@ -43,6 +43,7 @@ function WorkbenchToolbar({
   onToggleFullscreen: () => void;
 }) {
   const { dispatch } = useSim();
+  const { stopTask } = useTaskRunner();
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5">
       <span className="text-xs font-medium text-muted-foreground">
@@ -52,7 +53,12 @@ function WorkbenchToolbar({
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => dispatch({ type: "RESET" })}
+          onClick={() => {
+            // The running scenario's ticked-off steps describe work that the
+            // reset has just discarded, so drop it too.
+            stopTask();
+            dispatch({ type: "RESET" });
+          }}
           title="Reset the simulator back to its starting data"
         >
           <RotateCcw className="size-3.5" />
@@ -120,7 +126,7 @@ function WorkbenchInner() {
 export function SimWorkbench() {
   return (
     <SimulatorProvider>
-      <TaskRunnerProvider>
+      <TaskRunnerProvider storageKey="conveyancing-academy:task:practice-system">
         <WorkbenchInner />
       </TaskRunnerProvider>
     </SimulatorProvider>
