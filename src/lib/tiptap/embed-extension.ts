@@ -41,10 +41,14 @@ export const Embed = Node.create({
 
   renderHTML({ HTMLAttributes }) {
     const src = HTMLAttributes.src as string | undefined;
+    const allowed = !!src && isAllowedEmbedUrl(src);
+    // A rejected URL is dropped from the wrapper too, so it never appears in
+    // the page's markup at all — not even on an inert attribute.
+    const { src: _src, ...withoutSrc } = HTMLAttributes;
     return [
       "div",
-      mergeAttributes(HTMLAttributes, { "data-embed": "" }),
-      src && isAllowedEmbedUrl(src)
+      mergeAttributes(allowed ? HTMLAttributes : withoutSrc, { "data-embed": "" }),
+      allowed
         ? [
             "iframe",
             {

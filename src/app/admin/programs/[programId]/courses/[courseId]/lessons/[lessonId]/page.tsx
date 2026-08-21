@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { courseBelongsToProgram } from "@/lib/stage-access";
 import {
   updateLessonContent,
   updateLessonTrainerNotes,
@@ -39,7 +40,7 @@ export default async function AdminLessonDetailPage({
     include: {
       module: {
         include: {
-          course: { include: { program: true } },
+          course: { include: { program: true, stage: { select: { programId: true } } } },
           lessons: {
             orderBy: { order: "asc" },
             select: { id: true, title: true, estimatedMinutes: true, isPublished: true, content: true },
@@ -55,7 +56,11 @@ export default async function AdminLessonDetailPage({
     },
   });
 
-  if (!lesson || lesson.module.course.id !== courseId || lesson.module.course.programId !== programId) {
+  if (
+    !lesson ||
+    lesson.module.course.id !== courseId ||
+    !courseBelongsToProgram(lesson.module.course, programId)
+  ) {
     notFound();
   }
 

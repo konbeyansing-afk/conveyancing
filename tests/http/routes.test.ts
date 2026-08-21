@@ -237,6 +237,71 @@ describeIfUp()("Reported figures match the database", () => {
   });
 });
 
+describeIfUp()("Admin navigation actually goes somewhere", () => {
+  /** Every distinct in-app admin link on a page. */
+  function adminLinks(html: string): string[] {
+    const found = html.match(/\/admin\/programs\/[a-z0-9]+(?:\/courses\/[a-z0-9]+(?:\/lessons\/[a-z0-9]+)?)?/g) ?? [];
+    return [...new Set(found)];
+  }
+
+  /** Fetches links a few at a time — serial is too slow, all at once floods the dev server. */
+  async function findBroken(links: string[]): Promise<string[]> {
+    const broken: string[] = [];
+    const BATCH = 6;
+    for (let i = 0; i < links.length; i += BATCH) {
+      const batch = links.slice(i, i + BATCH);
+      const results = await Promise.all(
+        batch.map(async (link) => ({ link, status: (await get(link, adminCookie)).status })),
+      );
+      for (const r of results) if (r.status !== 200) broken.push(`${r.status} ${r.link}`);
+    }
+    return broken;
+  }
+
+  it("opens every program from the Programs list", { timeout: 120_000 }, async () => {
+    const html = await (await get("/admin/programs", adminCookie)).text();
+    const links = adminLinks(html);
+    expect(links.length).toBeGreaterThan(0);
+    expect(await findBroken(links)).toEqual([]);
+  });
+
+  it("opens every course and lesson linked from a program page", { timeout: 300_000 }, async () => {
+    // Regression: the course and lesson pages rejected the request unless
+    // `course.programId` matched the URL, but the program page builds its
+    // links from the stage's program. Where those disagreed — which is every
+    // course in the main journey program — the admin could not open any of
+    // its courses or lessons at all.
+    const programs = await prisma.program.findMany({
+      where: { stages: { some: { courses: { some: {} } } } },
+      select: { id: true },
+    });
+    expect(programs.length).toBeGreaterThan(0);
+
+    const broken: string[] = [];
+    for (const program of programs) {
+      const html = await (await get(`/admin/programs/${program.id}`, adminCookie)).text();
+      broken.push(...(await findBroken(adminLinks(html))));
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it("still refuses a course that belongs to neither the program nor its stages", async () => {
+    const stray = await prisma.course.findFirst({
+      where: { stageId: null },
+      select: { id: true, programId: true },
+    });
+    if (!stray) return;
+    const otherProgram = await prisma.program.findFirst({
+      where: { id: { not: stray.programId } },
+      select: { id: true },
+    });
+    if (!otherProgram) return;
+
+    const res = await get(`/admin/programs/${otherProgram.id}/courses/${stray.id}`, adminCookie);
+    expect(res.status).toBe(404);
+  });
+});
+
 describeIfUp()("Bad and hostile input", () => {
   const badIds = [
     "does-not-exist",

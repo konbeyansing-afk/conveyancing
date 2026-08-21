@@ -15,6 +15,22 @@ export function isCoursePublished(course: {
   return course.program.isPublished;
 }
 
+/**
+ * Whether a course sits under the given program.
+ *
+ * A course carries a required `programId` and, once it is placed in a stage,
+ * that stage's program. The two can disagree — several courses here are owned
+ * by a shell program while their stage lives in the real journey program — so
+ * either match counts. Checking only `programId` made every course link on the
+ * journey program's admin page 404.
+ */
+export function courseBelongsToProgram(
+  course: { programId: string; stage: { programId: string } | null },
+  programId: string
+): boolean {
+  return course.programId === programId || course.stage?.programId === programId;
+}
+
 export async function isStageComplete(stageId: string, userId: string): Promise<boolean> {
   const stage = await prisma.stage.findUnique({
     where: { id: stageId },

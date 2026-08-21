@@ -12,6 +12,7 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { courseBelongsToProgram } from "@/lib/stage-access";
 import { toggleCoursePublish, deleteCourse } from "@/lib/actions/courses";
 import { deleteModule } from "@/lib/actions/modules";
 import { deleteLesson, moveLessonOrder } from "@/lib/actions/lessons";
@@ -64,6 +65,7 @@ export default async function AdminCourseDetailPage({
     where: { id: courseId },
     include: {
       program: true,
+      stage: { select: { programId: true } },
       modules: {
         orderBy: { order: "asc" },
         include: {
@@ -76,7 +78,7 @@ export default async function AdminCourseDetailPage({
     },
   });
 
-  if (!course || course.programId !== programId) notFound();
+  if (!course || !courseBelongsToProgram(course, programId)) notFound();
 
   const lessonCount = course.modules.reduce((sum, m) => sum + m.lessons.length, 0);
 
