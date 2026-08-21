@@ -80,8 +80,11 @@ export default async function AdminReportsPage() {
           description="Once trainees are enrolled and working through lessons, course-by-course completion will show up here."
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-xl border">
+          {/* overflow-x-auto, not overflow-hidden: the table is wider than a
+              phone and was being clipped, with no way to reach the right-hand
+              columns. */}
+          <table className="w-full min-w-[44rem] text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground uppercase">
                 <th className="px-4 py-2.5 font-medium">Course</th>
