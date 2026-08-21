@@ -110,7 +110,7 @@ export function formatMoney(n: number): string {
   return n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 }
 
-function pexaReducer(state: PexaState, action: PexaAction): PexaState {
+export function pexaReducer(state: PexaState, action: PexaAction): PexaState {
   switch (action.type) {
     case "OPEN_WORKSPACE":
       return withLog(

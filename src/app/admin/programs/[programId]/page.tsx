@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { BookOpen, ChevronDown, ExternalLink, Lock, Pencil, ShieldCheck, Trash2, Users } from "lucide-react";
+import { BookOpen, ChevronDown, ExternalLink, Lock, Pencil, ShieldCheck, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { toggleProgramPublish, deleteProgram } from "@/lib/actions/programs";

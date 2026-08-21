@@ -240,7 +240,7 @@ export function formatMoney(n: number): string {
   return n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 }
 
-function simReducer(state: SimState, action: SimAction): SimState {
+export function simReducer(state: SimState, action: SimAction): SimState {
   switch (action.type) {
     case "NAV_RAIL":
       return withLog(

@@ -42,7 +42,6 @@ export function QuizAttemptForm({
         description: `You've completed "${state.stageJustCompleted.title}" — your next stage is now unlocked.`,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
   if (state) {
@@ -123,6 +122,7 @@ export function QuizAttemptForm({
         <h1 className="mf-display text-3xl font-medium">{quizTitle}</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--mf-ink-soft)" }}>
           Answer every question, then submit — you&apos;ll see your score and feedback right away.
+          You need {passingScore}% to pass.
         </p>
 
         <form action={formAction} className="mt-6 grid gap-4">

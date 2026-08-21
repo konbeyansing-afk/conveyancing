@@ -6,7 +6,14 @@
     "dev": "cross-env NODE_OPTIONS=--use-system-ca next dev",
     "build": "next build",
     "start": "cross-env NODE_OPTIONS=--use-system-ca next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "cross-env NODE_OPTIONS=--use-system-ca vitest run",
+    "test:watch": "cross-env NODE_OPTIONS=--use-system-ca vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "cross-env NODE_OPTIONS=--use-system-ca vitest run tests/integration",
+    "test:routes": "cross-env NODE_OPTIONS=--use-system-ca vitest run tests/http",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -48,7 +55,8 @@
     "shadcn": "^4.16.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.8",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   },
   "packageManager": "pnpm@11.20.0"
 }

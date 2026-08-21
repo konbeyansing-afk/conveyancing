@@ -98,7 +98,7 @@ export function formatMoney(n: number): string {
   return n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
 }
 
-function asReducer(state: AsState, action: AsAction): AsState {
+export function asReducer(state: AsState, action: AsAction): AsState {
   switch (action.type) {
     case "OPEN_MATTER":
       return withLog(
