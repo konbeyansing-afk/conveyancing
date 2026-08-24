@@ -24,45 +24,56 @@ enum EnrollmentStatus {
 }
 
 model User {
-  id                      String             @id @default(cuid())
-  name                    String
-  email                   String             @unique
-  passwordHash            String
-  role                    Role               @default(TRAINEE)
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
-  enrollments             Enrollment[]
-  lessonProgress          LessonProgress[]
-  quizAttempts            QuizAttempt[]
-  completionRecords       CompletionRecord[]
-  notifications           Notification[]
-  stageApprovalsReceived  StageApproval[]    @relation("TraineeStageApprovals")
-  stageApprovalsGranted   StageApproval[]    @relation("GrantedStageApprovals")
+  id                     String              @id @default(cuid())
+  name                   String
+  email                  String              @unique
+  passwordHash           String
+  /**
+   * Set when an account is created or its password is reset by an admin.
+   */
+  mustChangePassword     Boolean             @default(false)
+  passwordChangedAt      DateTime?
+  role                   Role                @default(TRAINEE)
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  enrollments            Enrollment[]
+  lessonProgress         LessonProgress[]
+  quizAttempts           QuizAttempt[]
+  completionRecords      CompletionRecord[]
+  notifications          Notification[]
+  stageApprovalsReceived StageApproval[]     @relation("TraineeStageApprovals")
+  stageApprovalsGranted  StageApproval[]     @relation("GrantedStageApprovals")
+  certificates           Certificate[]       @relation("EarnedCertificates")
+  certificatesIssued     Certificate[]       @relation("IssuedCertificates")
+  trainerAssignments     TrainerAssignment[] @relation("TrainerOf")
+  assignedTrainers       TrainerAssignment[] @relation("TraineeOf")
 }
 
 model Program {
-  id            String              @id @default(cuid())
-  slug          String              @unique
-  title         String
-  description   String?
-  coverImageUrl String?
-  isPublished   Boolean             @default(false)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  courses       Course[]
-  stages        Stage[]
-  resourceItems ResourceLibraryItem[]
+  id                String                @id @default(cuid())
+  slug              String                @unique
+  title             String
+  description       String?
+  coverImageUrl     String?
+  isPublished       Boolean               @default(false)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  courses           Course[]
+  stages            Stage[]
+  resourceItems     ResourceLibraryItem[]
+  completionRecords CompletionRecord[]
+  certificates      Certificate[]
 }
 
 model Stage {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   programId   String
-  program     Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  program     Program @relation(fields: [programId], references: [id], onDelete: Cascade)
   slug        String
   title       String
   description String?
-  order       Int      @default(0)
-  isPublished Boolean  @default(false)
+  order       Int     @default(0)
+  isPublished Boolean @default(false)
 
   prerequisiteStageId String?
   prerequisiteStage   Stage?  @relation("StagePrerequisite", fields: [prerequisiteStageId], references: [id], onDelete: SetNull)
@@ -71,14 +82,15 @@ model Stage {
   requireAllLessons      Boolean @default(true)
   requireQuizPass        Boolean @default(false)
   gatingQuizId           String? @unique
-  gatingQuiz              Quiz?  @relation(fields: [gatingQuizId], references: [id], onDelete: SetNull)
-  minQuizScore            Int?
-  requireTrainerApproval  Boolean @default(false)
+  gatingQuiz             Quiz?   @relation(fields: [gatingQuizId], references: [id], onDelete: SetNull)
+  minQuizScore           Int?
+  requireTrainerApproval Boolean @default(false)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  courses   Course[]
-  approvals StageApproval[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  courses           Course[]
+  approvals         StageApproval[]
+  completionRecords CompletionRecord[]
 
   @@unique([programId, slug])
 }
@@ -119,37 +131,38 @@ model Course {
 }
 
 model Module {
-  id        String   @id @default(cuid())
-  courseId  String
-  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  title     String
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  lessons   Lesson[]
+  id                String             @id @default(cuid())
+  courseId          String
+  course            Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title             String
+  order             Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  lessons           Lesson[]
+  completionRecords CompletionRecord[]
 }
 
 model Lesson {
-  id               String             @id @default(cuid())
-  moduleId         String
-  module           Module             @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  slug             String
-  title            String
-  description      String?
-  lessonType       LessonType         @default(STANDARD)
-  difficulty       Difficulty         @default(BEGINNER)
-  estimatedMinutes Int?
+  id                    String                @id @default(cuid())
+  moduleId              String
+  module                Module                @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  slug                  String
+  title                 String
+  description           String?
+  lessonType            LessonType            @default(STANDARD)
+  difficulty            Difficulty            @default(BEGINNER)
+  estimatedMinutes      Int?
   completionRequirement CompletionRequirement @default(VIEW_ALL)
-  isPublished      Boolean            @default(false)
-  order            Int                @default(0)
-  content          Json?
-  trainerNotes     Json?
-  videoAssetId     String?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  attachments      LessonAttachment[]
-  quiz             Quiz?
-  progress         LessonProgress[]
+  isPublished           Boolean               @default(false)
+  order                 Int                   @default(0)
+  content               Json?
+  trainerNotes          Json?
+  videoAssetId          String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  attachments           LessonAttachment[]
+  quiz                  Quiz?
+  progress              LessonProgress[]
 
   @@unique([moduleId, slug])
 }
@@ -186,17 +199,17 @@ model LessonAttachment {
 }
 
 model Quiz {
-  id           String        @id @default(cuid())
-  courseId     String
-  course       Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lessonId     String?       @unique
-  lesson       Lesson?       @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  title        String
-  passingScore Int           @default(80)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  questions    Question[]
-  attempts     QuizAttempt[]
+  id             String        @id @default(cuid())
+  courseId       String
+  course         Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessonId       String?       @unique
+  lesson         Lesson?       @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  title          String
+  passingScore   Int           @default(80)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  questions      Question[]
+  attempts       QuizAttempt[]
   gatingForStage Stage?
 }
 
@@ -234,13 +247,13 @@ model QuizAttempt {
 }
 
 model Enrollment {
-  id          String           @id @default(cuid())
-  userId      String
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  courseId    String
-  course      Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  status      EnrollmentStatus @default(ACTIVE)
-  enrolledAt  DateTime         @default(now())
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId   String
+  course     Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  status     EnrollmentStatus @default(ACTIVE)
+  enrolledAt DateTime         @default(now())
 
   @@unique([userId, courseId])
 }
@@ -256,15 +269,105 @@ model LessonProgress {
   @@unique([userId, lessonId])
 }
 
-model CompletionRecord {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  courseId    String
-  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  completedAt DateTime @default(now())
+enum CompletionScope {
+  MODULE
+  COURSE
+  STAGE
+  PROGRAM
+}
 
-  @@unique([userId, courseId])
+/**
+ * An immutable milestone: the moment a trainee first satisfied everything a
+ * module, course, stage or program requires. The boolean is always recomputed
+ * from real progress (see src/lib/completion.ts); this table exists to remember
+ * *when* it first became true, which recomputation cannot tell you and which
+ * certificates depend on.
+ * Exactly one of moduleId/courseId/stageId/programId is set, matching `scope`.
+ * Postgres treats NULLs as distinct, so the four unique indexes each constrain
+ * only the scope they belong to.
+ */
+model CompletionRecord {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope       CompletionScope
+  moduleId    String?
+  module      Module?         @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  courseId    String?
+  course      Course?         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  stageId     String?
+  stage       Stage?          @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  programId   String?
+  program     Program?        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  completedAt DateTime        @default(now())
+
+  @@unique([userId, scope, moduleId])
+  @@unique([userId, scope, courseId])
+  @@unique([userId, scope, stageId])
+  @@unique([userId, scope, programId])
+  @@index([userId, scope])
+}
+
+enum CertificateStatus {
+  /**
+   * Program is complete; a trainer or admin still has to sign it off.
+   */
+  PENDING_APPROVAL
+  ISSUED
+  REVOKED
+}
+
+/**
+ * A certificate is only ever created once a program is genuinely complete, and
+ * only becomes ISSUED when a trainer or admin signs it off — which is where a
+ * human confirms the things the system cannot yet verify on its own (see the
+ * simulator-competency limitation in the README).
+ * Trainee name, program title and organisation are snapshotted so that renaming
+ * a program later does not rewrite an already-issued certificate.
+ */
+model Certificate {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation("EarnedCertificates", fields: [userId], references: [id], onDelete: Cascade)
+  programId String
+  program   Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  certificateNumber String            @unique
+  verificationCode  String            @unique
+  status            CertificateStatus @default(PENDING_APPROVAL)
+
+  traineeName         String
+  programTitle        String
+  issuingOrganisation String
+
+  completedAt   DateTime
+  issuedAt      DateTime?
+  issuedById    String?
+  issuedBy      User?     @relation("IssuedCertificates", fields: [issuedById], references: [id], onDelete: SetNull)
+  revokedAt     DateTime?
+  revokedReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, programId])
+  @@index([status])
+}
+
+/**
+ * Which trainees a trainer is responsible for. A trainer only ever sees the
+ * trainees assigned to them; an admin sees everyone.
+ */
+model TrainerAssignment {
+  id         String   @id @default(cuid())
+  trainerId  String
+  trainer    User     @relation("TrainerOf", fields: [trainerId], references: [id], onDelete: Cascade)
+  traineeId  String
+  trainee    User     @relation("TraineeOf", fields: [traineeId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([trainerId, traineeId])
+  @@index([trainerId])
 }
 
 model ResourceLibraryItem {

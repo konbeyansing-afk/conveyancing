@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { AppSidebar } from "@/components/nav/app-sidebar";
+import { MustChangePasswordBanner } from "@/components/account/must-change-password-banner";
 import type { NavKey } from "@/components/nav/nav-config";
 
 export function DashboardShell({
@@ -30,7 +31,10 @@ export function DashboardShell({
             {roleLabel} workspace
           </span>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4">{children}</div>
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          <MustChangePasswordBanner />
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

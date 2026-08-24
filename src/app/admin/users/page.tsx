@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { updateUserRole, deleteUser } from "@/lib/actions/users";
 import { EmptyState } from "@/components/empty-state";
 import { CreateUserForm } from "@/components/admin/create-user-form";
+import { ResetPasswordDialog } from "@/components/admin/reset-password-dialog";
 import { DeleteConfirmDialog } from "@/components/admin/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -65,6 +66,11 @@ export default async function AdminUsersPage() {
                       )}
                     </p>
                     <p className="text-sm text-muted-foreground">{user.email}</p>
+                    {user.mustChangePassword && (
+                      <p className="mt-1 text-xs font-medium text-warning">
+                        Still using a password someone else set
+                      </p>
+                    )}
                   </div>
                   {isSelf ? (
                     <Badge>{user.role}</Badge>
@@ -82,6 +88,11 @@ export default async function AdminUsersPage() {
                       <Button type="submit" variant="outline" size="sm">
                         Save
                       </Button>
+                      <ResetPasswordDialog
+                        userId={user.id}
+                        userName={user.name}
+                        userEmail={user.email}
+                      />
                       <DeleteConfirmDialog
                         trigger="Delete"
                         triggerVariant="ghost"

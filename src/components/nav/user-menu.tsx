@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { LogOut, UserCog } from "lucide-react";
 
 function initials(name: string) {
   return name
@@ -56,6 +57,11 @@ export function UserMenu({
             </div>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem render={<Link href="/account" />}>
+          <UserCog />
+          Account & password
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => signOutAction()}>
           <LogOut />
