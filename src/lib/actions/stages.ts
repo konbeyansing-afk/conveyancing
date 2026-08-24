@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/require-role";
 import { uniqueSlug } from "@/lib/slugify";
+import { syncCompletionForStage } from "@/lib/completion";
 
 function programPath(programId: string) {
   return `/admin/programs/${programId}`;
@@ -117,11 +118,16 @@ export async function approveStageForTrainee(programId: string, stageId: string,
     create: { stageId, userId, approvedById: actor.id, notes },
   });
 
+  // Sign-off may have been the last thing the stage was waiting for.
+  await syncCompletionForStage(stageId, userId);
+
   revalidatePath(programPath(programId));
 }
 
 export async function revokeStageApproval(programId: string, approvalId: string, _formData: FormData) {
   await requireRole("ADMIN", "TRAINER");
-  await prisma.stageApproval.delete({ where: { id: approvalId } });
+  const approval = await prisma.stageApproval.delete({ where: { id: approvalId } });
+  // Withdrawing sign-off can un-complete the stage, so the milestone goes too.
+  await syncCompletionForStage(approval.stageId, approval.userId);
   revalidatePath(programPath(programId));
 }

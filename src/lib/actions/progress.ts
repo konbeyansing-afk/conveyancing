@@ -5,11 +5,15 @@ import { prisma } from "@/lib/prisma";
 import { canPreviewUnpublished } from "@/lib/can-preview-unpublished";
 import { isEnrolledInCourse } from "@/lib/is-enrolled-in-course";
 import { isStageUnlockedForUser, isCoursePublished, isStageComplete } from "@/lib/stage-access";
+import { syncCompletionForLesson } from "@/lib/completion";
 
 export type MarkLessonCompleteResult = {
   ok: boolean;
   reason?: "quiz_required" | "stage_locked";
   stageJustCompleted?: { id: string; title: string };
+  /** Milestones this completion unlocked, in hierarchy order. */
+  newlyCompleted?: { scope: string; id: string; title: string }[];
+  programJustCompleted?: { id: string; title: string } | null;
 };
 
 export async function markLessonComplete(lessonId: string): Promise<MarkLessonCompleteResult> {
@@ -70,8 +74,21 @@ export async function markLessonComplete(lessonId: string): Promise<MarkLessonCo
     create: { userId, lessonId, completedAt: new Date() },
   });
 
+  // Milestones are recorded from what is now actually true, never from the fact
+  // that this action was reached.
+  const sync = await syncCompletionForLesson(lessonId, userId);
+
   if (course.stage && !wasStageComplete && (await isStageComplete(course.stage.id, userId))) {
-    return { ok: true, stageJustCompleted: { id: course.stage.id, title: course.stage.title } };
+    return {
+      ok: true,
+      stageJustCompleted: { id: course.stage.id, title: course.stage.title },
+      newlyCompleted: sync.newlyCompleted,
+      programJustCompleted: sync.programCompleted,
+    };
   }
-  return { ok: true };
+  return {
+    ok: true,
+    newlyCompleted: sync.newlyCompleted,
+    programJustCompleted: sync.programCompleted,
+  };
 }

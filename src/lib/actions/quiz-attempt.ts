@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { canPreviewUnpublished } from "@/lib/can-preview-unpublished";
 import { isEnrolledInCourse } from "@/lib/is-enrolled-in-course";
 import { isStageUnlockedForUser, isCoursePublished, isStageComplete } from "@/lib/stage-access";
+import { syncCompletionForStage } from "@/lib/completion";
 
 export type QuestionResult = {
   questionId: string;
@@ -105,6 +106,10 @@ export async function submitQuizAttempt(
   await prisma.quizAttempt.create({
     data: { quizId, userId, score, passed, answers, submittedAt: new Date() },
   });
+
+  // A passing attempt can satisfy a stage's gating quiz, which can in turn
+  // complete the stage and the program.
+  if (quiz.course.stage) await syncCompletionForStage(quiz.course.stage.id, userId);
 
   if (
     quiz.course.stage &&
