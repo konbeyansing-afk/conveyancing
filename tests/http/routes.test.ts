@@ -224,18 +224,50 @@ function statCardValue(html: string, label: string): number | null {
   return last ? Number(last[1]) : null;
 }
 
+/**
+ * Fetches the page and the live count in a loop until they agree, or gives up.
+ *
+ * The page render and the count query are two separate round trips, and other
+ * suites in this parallelised run are creating and deleting their own
+ * ZZ-AUDIT courses and programs the whole time — a real gap between the two
+ * reads is expected, not a bug. A genuine double-counting regression fails
+ * every attempt identically; a transient race resolves within a retry or two.
+ */
+async function expectStatCardMatchesLiveCount(
+  label: string,
+  fetchPage: () => Promise<string>,
+  liveCount: () => Promise<number>,
+) {
+  const ATTEMPTS = 5;
+  let lastShown: number | null = null;
+  let lastActual = -1;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    const html = await fetchPage();
+    lastShown = statCardValue(html, label);
+    lastActual = await liveCount();
+    if (lastShown === lastActual) return;
+  }
+  expect(lastShown, `did not settle after ${ATTEMPTS} attempts`).toBe(lastActual);
+}
+
 describeIfUp()("Reported figures match the database", () => {
   it("reports the real number of courses on the Programs page", async () => {
     // Regression: the page summed a per-program count built by concatenating
     // program.courses with program.stages[].courses, which counts every
     // stage-attached course twice.
-    const html = await (await get("/admin/programs", adminCookie)).text();
-    expect(statCardValue(html, "Total courses")).toBe(await prisma.course.count());
+    await expectStatCardMatchesLiveCount(
+      "Total courses",
+      async () => (await get("/admin/programs", adminCookie)).text(),
+      () => prisma.course.count(),
+    );
   });
 
   it("reports the real number of programs on the Programs page", async () => {
-    const html = await (await get("/admin/programs", adminCookie)).text();
-    expect(statCardValue(html, "Total programs")).toBe(await prisma.program.count());
+    await expectStatCardMatchesLiveCount(
+      "Total programs",
+      async () => (await get("/admin/programs", adminCookie)).text(),
+      () => prisma.program.count(),
+    );
   });
 });
 
@@ -264,7 +296,27 @@ describeIfUp()("Admin navigation actually goes somewhere", () => {
     const html = await (await get("/admin/programs", adminCookie)).text();
     const links = adminLinks(html);
     expect(links.length).toBeGreaterThan(0);
-    expect(await findBroken(links)).toEqual([]);
+
+    // Audit fixtures from other parallel suites come and go for the whole
+    // duration of this crawl (up to 120s) — a link into one of them can be
+    // valid the moment the list was fetched and legitimately gone by the time
+    // this test gets around to checking it. This test is about the real
+    // content library staying reachable, not about a fixture another file
+    // happened to be deleting mid-run.
+    const auditProgramIds = new Set(
+      (
+        await prisma.program.findMany({
+          where: { title: { startsWith: "ZZ-AUDIT" } },
+          select: { id: true },
+        })
+      ).map((p) => p.id),
+    );
+    const stableLinks = links.filter((link) => {
+      const programId = link.match(/\/admin\/programs\/([a-z0-9]+)/)?.[1];
+      return !programId || !auditProgramIds.has(programId);
+    });
+
+    expect(await findBroken(stableLinks)).toEqual([]);
   });
 
   it("opens every course and lesson linked from a program page", { timeout: 300_000 }, async () => {

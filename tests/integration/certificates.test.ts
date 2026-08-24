@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   assertDatabaseReachable,
   cleanup,
+  completeLesson,
   createCourseWithLessons,
   createProgram,
   createStage,
@@ -63,15 +64,19 @@ afterAll(async () => {
 });
 
 /** A one-stage, one-lesson program the trainee is enrolled in but has not finished. */
-async function makeProgram(title: string, lessonCount = 1) {
+async function makeProgramFor(userId: string, title: string, lessonCount = 1) {
   const program = await createProgram({ isPublished: true });
   const stage = await createStage(program.id, { order: 0, title: `${title} Stage` });
   const course = await createCourseWithLessons(program.id, stage.id, {
     title: `${title} Course`,
     lessonCount,
   });
-  await enrol(trainee.id, course.id);
+  await enrol(userId, course.id);
   return { program, stage, course, lessons: course.modules[0].lessons };
+}
+
+async function makeProgram(title: string, lessonCount = 1) {
+  return makeProgramFor(trainee.id, title, lessonCount);
 }
 
 async function finish(lessons: { id: string }[]) {
@@ -175,6 +180,43 @@ describe("Creating the record", () => {
       expect(c.certificateNumber).toMatch(/^CA-\d{4}-\d{6}$/);
       expect(c.verificationCode).toMatch(/^[0-9a-f]{32}$/);
     }
+  });
+
+  it("never hands out the same certificate number to two truly concurrent completions", async () => {
+    // Regression: certificateNumber used to be allocated by reading the
+    // current highest number and adding one — two calls close enough
+    // together could read the same "current highest" and compute the same
+    // next number. Sequential awaits (as in the test above) never exercise
+    // that window.
+    //
+    // This calls createPendingCertificate directly rather than going through
+    // markLessonComplete: that action reads the signed-in user off the
+    // mocked auth() session, and this file's mock is one shared mutable
+    // `session.user` — genuinely concurrent Promise.all calls would race on
+    // *that*, which is a limitation of the test double, not of the app. Going
+    // straight to the function under test (which takes userId as an explicit
+    // argument and never touches auth()) isolates exactly the thing this
+    // regression is about: number allocation under real concurrency.
+    const CONCURRENT = 8;
+    const setups = await Promise.all(
+      Array.from({ length: CONCURRENT }, async (_, i) => {
+        const t = await createUser("TRAINEE", `concurrent-cert-${i}`);
+        const { program, lessons } = await makeProgramFor(t.id, `Concurrent ${i}`);
+        for (const lesson of lessons) await completeLesson(t.id, lesson.id);
+        return { trainee: t, program };
+      }),
+    );
+
+    const results = await Promise.all(
+      setups.map(({ trainee: t, program }) => createPendingCertificate(t.id, program.id)),
+    );
+    const certificateNumbers = results.map((r) => {
+      if (!("certificate" in r)) throw new Error(`expected a certificate, got ${JSON.stringify(r)}`);
+      return r.certificate.certificateNumber;
+    });
+
+    expect(certificateNumbers).toHaveLength(CONCURRENT);
+    expect(new Set(certificateNumbers).size).toBe(CONCURRENT);
   });
 
   it("does not create a second certificate for the same program", async () => {

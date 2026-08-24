@@ -55,17 +55,25 @@ export async function checkEligibility(userId: string, programId: string): Promi
   return { eligible: true };
 }
 
-/** Human-readable, sortable, and unique: CA-2026-000042. */
+/**
+ * Human-readable, sortable, and unique: CA-2026-000042.
+ *
+ * Allocated from CertificateSequence via Prisma's `increment`, which Postgres
+ * compiles to an atomic `INSERT ... ON CONFLICT DO UPDATE SET value = value +
+ * 1 RETURNING value` — a single statement that takes a row lock for its own
+ * duration, so no two concurrent callers can ever be handed the same value.
+ * An earlier read-latest-then-increment version could and did collide under
+ * real concurrent program completions; this cannot.
+ */
 async function nextCertificateNumber(): Promise<string> {
   const year = new Date().getFullYear();
   const prefix = `CA-${year}-`;
-  const latest = await prisma.certificate.findFirst({
-    where: { certificateNumber: { startsWith: prefix } },
-    orderBy: { certificateNumber: "desc" },
-    select: { certificateNumber: true },
+  const sequence = await prisma.certificateSequence.upsert({
+    where: { year },
+    create: { year, value: 1 },
+    update: { value: { increment: 1 } },
   });
-  const previous = latest ? Number(latest.certificateNumber.slice(prefix.length)) : 0;
-  return `${prefix}${String(previous + 1).padStart(6, "0")}`;
+  return `${prefix}${String(sequence.value).padStart(6, "0")}`;
 }
 
 /** Opaque, unguessable, and safe in a URL — the token a third party checks. */
@@ -105,15 +113,15 @@ export async function createPendingCertificate(
   // to now only if the record is somehow missing.
   const finishedAt = (await completedAt(userId, "PROGRAM", programId)) ?? new Date();
 
-  // nextCertificateNumber() is a non-atomic read-latest-then-increment, so two
-  // programs completing at nearly the same moment can compute the same number.
-  // Rather than serialise every certificate behind a lock, retry on the
-  // specific unique constraint that collided: a fresh number (and, on the
-  // astronomically unlikely chance, a fresh verification code) resolves a
-  // numbering collision, while a collision on userId+programId means someone
-  // else's request already created this exact certificate and the existing
-  // row is the right answer.
-  const MAX_ATTEMPTS = 5;
+  // certificateNumber is allocated atomically (see nextCertificateNumber) and
+  // cannot collide. verificationCode is 128 bits of randomness and cannot
+  // collide in practice. The one real, expected race left is two calls
+  // completing the same trainee's same program at nearly the same instant —
+  // both pass the eligibility check above before either has inserted a row,
+  // then both attempt to create one and exactly one wins the unique
+  // constraint on userId+programId. That is not a failure: the loser simply
+  // looks up and returns the row the winner created.
+  const MAX_ATTEMPTS = 3;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const certificate = await prisma.certificate.create({
@@ -145,12 +153,11 @@ export async function createPendingCertificate(
         continue;
       }
 
-      // certificateNumber or verificationCode collided: retry with fresh
-      // values, unless this was the last attempt.
+      // Not a collision this function knows how to resolve (e.g. the
+      // practically-impossible verificationCode collision) — one more try
+      // with fresh values, then give up rather than loop forever.
       if (attempt === MAX_ATTEMPTS) {
-        throw new Error(
-          `Could not allocate a unique certificate number after ${MAX_ATTEMPTS} attempts.`
-        );
+        throw new Error(`Could not create the certificate after ${MAX_ATTEMPTS} attempts.`);
       }
     }
   }

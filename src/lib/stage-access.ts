@@ -103,12 +103,33 @@ export async function isEnrolledInProgram(programId: string): Promise<boolean> {
   return count > 0;
 }
 
+export type ContinueLearningTarget = {
+  course: { id: string; title: string };
+  lesson: { id: string; title: string };
+  href: string;
+};
+
+export type UpcomingAssessment = {
+  quizTitle: string;
+  lessonTitle: string;
+  /** The lesson's own quiz page — the only quiz route a trainee can reach. */
+  href: string;
+};
+
 /**
- * First not-yet-completed published lesson within a stage, for a "continue where you left off" CTA.
- * Only considers courses the trainee is actually enrolled in — access is enrollment-gated
- * (see isEnrolledInCourse), so a lesson in a stage-unlocked-but-not-enrolled course would 404.
+ * Where a trainee should pick back up in a stage, and the next quiz-bearing
+ * lesson waiting for them in it — the data behind the dashboard's "what am I
+ * currently learning" and "do I have an assessment coming up" answers.
+ *
+ * Only considers courses the trainee is actually enrolled in — access is
+ * enrollment-gated (see isEnrolledInCourse), so a lesson in a
+ * stage-unlocked-but-not-enrolled course would 404. Everything here is read
+ * off real lesson/progress/quiz-attempt rows; nothing is inferred or assumed.
  */
-export async function getNextLessonHrefForStage(stageId: string, userId: string): Promise<string | null> {
+export async function getContinueLearningInfo(
+  stageId: string,
+  userId: string
+): Promise<{ target: ContinueLearningTarget | null; upcomingAssessment: UpcomingAssessment | null }> {
   const [courses, enrollments] = await Promise.all([
     prisma.course.findMany({
       where: { stageId },
@@ -116,7 +137,13 @@ export async function getNextLessonHrefForStage(stageId: string, userId: string)
       include: {
         modules: {
           orderBy: { order: "asc" },
-          include: { lessons: { where: { isPublished: true }, orderBy: { order: "asc" }, select: { id: true } } },
+          include: {
+            lessons: {
+              where: { isPublished: true },
+              orderBy: { order: "asc" },
+              select: { id: true, title: true, quiz: { select: { id: true, title: true } } },
+            },
+          },
         },
       },
     }),
@@ -125,23 +152,66 @@ export async function getNextLessonHrefForStage(stageId: string, userId: string)
   const enrolledCourseIds = new Set(enrollments.map((e) => e.courseId));
   const enrolledCourses = courses.filter((c) => enrolledCourseIds.has(c.id));
 
-  const lessonIds = enrolledCourses.flatMap((c) => c.modules.flatMap((m) => m.lessons.map((l) => l.id)));
-  const completed = lessonIds.length
-    ? await prisma.lessonProgress.findMany({
-        where: { userId, lessonId: { in: lessonIds }, completedAt: { not: null } },
-        select: { lessonId: true },
-      })
-    : [];
-  const completedSet = new Set(completed.map((p) => p.lessonId));
+  const orderedLessons = enrolledCourses.flatMap((course) =>
+    course.modules.flatMap((mod) =>
+      mod.lessons.map((lesson) => ({
+        courseId: course.id,
+        courseTitle: course.title,
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        quiz: lesson.quiz,
+      }))
+    )
+  );
+  const lessonIds = orderedLessons.map((l) => l.lessonId);
+  const quizIds = orderedLessons.map((l) => l.quiz?.id).filter((id): id is string => !!id);
 
-  for (const course of enrolledCourses) {
-    for (const mod of course.modules) {
-      for (const lesson of mod.lessons) {
-        if (!completedSet.has(lesson.id)) return `/app/courses/${course.id}/lessons/${lesson.id}`;
-      }
+  const [completedProgress, passedAttempts] = await Promise.all([
+    lessonIds.length
+      ? prisma.lessonProgress.findMany({
+          where: { userId, lessonId: { in: lessonIds }, completedAt: { not: null } },
+          select: { lessonId: true },
+        })
+      : Promise.resolve([]),
+    quizIds.length
+      ? prisma.quizAttempt.findMany({
+          where: { userId, quizId: { in: quizIds }, passed: true },
+          select: { quizId: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const completedSet = new Set(completedProgress.map((p) => p.lessonId));
+  const passedQuizIds = new Set(passedAttempts.map((a) => a.quizId));
+
+  let target: ContinueLearningTarget | null = null;
+  let upcomingAssessment: UpcomingAssessment | null = null;
+
+  for (const lesson of orderedLessons) {
+    if (!target && !completedSet.has(lesson.lessonId)) {
+      target = {
+        course: { id: lesson.courseId, title: lesson.courseTitle },
+        lesson: { id: lesson.lessonId, title: lesson.lessonTitle },
+        href: `/app/courses/${lesson.courseId}/lessons/${lesson.lessonId}`,
+      };
     }
+    // The nearest lesson, in stage order, whose quiz has not yet been passed —
+    // whether or not it's also the very next lesson.
+    if (!upcomingAssessment && lesson.quiz && !passedQuizIds.has(lesson.quiz.id)) {
+      upcomingAssessment = {
+        quizTitle: lesson.quiz.title,
+        lessonTitle: lesson.lessonTitle,
+        href: `/app/courses/${lesson.courseId}/lessons/${lesson.lessonId}/quiz`,
+      };
+    }
+    if (target && upcomingAssessment) break;
   }
-  return null;
+
+  return { target, upcomingAssessment };
+}
+
+/** Thin wrapper over getContinueLearningInfo for callers that only need the href. */
+export async function getNextLessonHrefForStage(stageId: string, userId: string): Promise<string | null> {
+  return (await getContinueLearningInfo(stageId, userId)).target?.href ?? null;
 }
 
 /**

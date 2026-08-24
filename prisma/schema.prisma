@@ -320,6 +320,20 @@ enum CertificateStatus {
 }
 
 /**
+ * A single-row-per-year atomic counter behind certificate numbers
+ * (CA-2026-000042). Allocating a number is one `UPDATE ... SET value =
+ * value + 1 WHERE year = $1 RETURNING value` (via Prisma's `increment`),
+ * which Postgres serialises at the row level — concurrent callers can never
+ * be handed the same value, no matter how many race at once. This replaces
+ * an earlier read-latest-then-increment approach that could and did collide
+ * under real concurrent program completions.
+ */
+model CertificateSequence {
+  year  Int @id
+  value Int @default(0)
+}
+
+/**
  * A certificate is only ever created once a program is genuinely complete, and
  * only becomes ISSUED when a trainer or admin signs it off — which is where a
  * human confirms the things the system cannot yet verify on its own (see the

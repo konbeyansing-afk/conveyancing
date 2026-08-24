@@ -1,16 +1,13 @@
-import { Award, CheckCircle2, PlayCircle, Route } from "lucide-react";
+import { Award, CheckCircle2, Route } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { StatTile } from "@/components/stat-tile";
 import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import {
-  getJourneyForUser,
-  getNextLessonHrefForStage,
-  getPrimaryProgramForUser,
-} from "@/lib/stage-access";
-import { JourneySummaryCard } from "@/components/trainee/journey-summary-card";
+import { getContinueLearningInfo, getJourneyForUser, getPrimaryProgramForUser } from "@/lib/stage-access";
+import { ContinueLearningCard } from "@/components/trainee/continue-learning-card";
+import { ProgramProgressCard } from "@/components/trainee/program-progress-card";
 
 export default async function TraineeDashboardPage() {
   const session = await auth();
@@ -31,20 +28,47 @@ export default async function TraineeDashboardPage() {
       take: 5,
       include: { quiz: { select: { title: true } } },
     }),
+    // Scoped to the "Certificates" stat tile, which is deliberately a
+    // program-agnostic total — a trainee could have finished more than one.
     prisma.certificate.groupBy({ by: ["status"], where: { userId }, _count: true }),
   ]);
 
-  const issuedCertificates =
-    certificateCounts.find((c) => c.status === "ISSUED")?._count ?? 0;
+  const issuedCertificates = certificateCounts.find((c) => c.status === "ISSUED")?._count ?? 0;
   const pendingCertificates =
     certificateCounts.find((c) => c.status === "PENDING_APPROVAL")?._count ?? 0;
 
-  const stages = program ? await getJourneyForUser(program.id, userId) : [];
+  const [stages, primaryCertificate] = await Promise.all([
+    program ? getJourneyForUser(program.id, userId) : Promise.resolve([]),
+    program
+      ? prisma.certificate.findUnique({
+          where: { userId_programId: { userId, programId: program.id } },
+          select: { status: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
   const currentStage = stages.find((s) => s.status === "current");
-  const continueHref = currentStage ? await getNextLessonHrefForStage(currentStage.id, userId) : null;
+  const { target: continueTarget, upcomingAssessment } = currentStage
+    ? await getContinueLearningInfo(currentStage.id, userId)
+    : { target: null, upcomingAssessment: null };
 
   const completedStages = stages.filter((s) => s.status === "completed").length;
+  const lockedStageCount = stages.filter((s) => s.status === "locked").length;
+  const allStagesComplete = stages.length > 0 && completedStages === stages.length;
   const overallPercent = stages.length > 0 ? Math.round((completedStages / stages.length) * 100) : 0;
+
+  const totalLessons = stages.reduce((sum, s) => sum + s.totalLessons, 0);
+  const completedLessons = stages.reduce((sum, s) => sum + s.completedLessons, 0);
+
+  const nextMilestone = allStagesComplete
+    ? primaryCertificate?.status === "ISSUED"
+      ? "Program complete — certificate issued"
+      : "Program complete — certificate awaiting sign-off"
+    : currentStage
+      ? `Complete "${currentStage.title}"`
+      : lockedStageCount > 0
+        ? "Waiting on a prerequisite stage"
+        : null;
 
   type Activity = { key: string; timestamp: Date; message: string; dot: string };
   const activity: Activity[] = [
@@ -73,42 +97,6 @@ export default async function TraineeDashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile
-          icon={CheckCircle2}
-          value={completedStages}
-          label="Stages Completed"
-          hint={`of ${stages.length}`}
-          tone="success"
-        />
-        <StatTile
-          icon={PlayCircle}
-          value={currentStage ? `Stage ${currentStage.order + 1}` : "—"}
-          label="Current Stage"
-          hint={currentStage?.title}
-          tone="primary"
-        />
-        <StatTile
-          icon={Route}
-          value={`${overallPercent}%`}
-          label="Overall Progress"
-          hint="Across all stages"
-          tone="warning"
-        />
-        <StatTile
-          icon={Award}
-          value={issuedCertificates}
-          label="Certificates"
-          hint={
-            pendingCertificates > 0
-              ? `${pendingCertificates} awaiting sign-off`
-              : issuedCertificates > 0
-                ? "Earned"
-                : "Finish a program to earn one"
-          }
-        />
-      </div>
-
       {stages.length === 0 ? (
         <EmptyState
           icon={Route}
@@ -116,36 +104,81 @@ export default async function TraineeDashboardPage() {
           description="Your guided training pathway will appear here once it's been set up."
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <JourneySummaryCard programTitle={program!.title} stages={stages} continueHref={continueHref} />
+        <>
+          <ContinueLearningCard
+            stageTitle={currentStage?.title ?? null}
+            stageHasPublishedLessons={(currentStage?.totalLessons ?? 0) > 0}
+            target={continueTarget}
+            upcomingAssessment={upcomingAssessment}
+            allStagesComplete={allStagesComplete}
+            certificateStatus={primaryCertificate?.status ?? null}
+          />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {activity.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nothing yet — your completed lessons and quiz results will show up here.
-                </p>
-              ) : (
-                <ul className="grid gap-4">
-                  {activity.map((item) => (
-                    <li key={item.key} className="flex gap-2.5 text-sm">
-                      <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${item.dot}`} />
-                      <div>
-                        <p>{item.message}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatRelativeTime(item.timestamp)}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatTile
+              icon={CheckCircle2}
+              value={completedStages}
+              label="Stages Completed"
+              hint={`of ${stages.length}`}
+              tone="success"
+            />
+            <StatTile
+              icon={Route}
+              value={`${overallPercent}%`}
+              label="Stage Progress"
+              hint="Across all stages"
+              tone="primary"
+            />
+            <StatTile
+              icon={Award}
+              value={issuedCertificates}
+              label="Certificates"
+              hint={
+                pendingCertificates > 0
+                  ? `${pendingCertificates} awaiting sign-off`
+                  : issuedCertificates > 0
+                    ? "Earned"
+                    : "Finish a program to earn one"
+              }
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+            <ProgramProgressCard
+              completedLessons={completedLessons}
+              totalLessons={totalLessons}
+              nextMilestone={nextMilestone}
+              lockedStageCount={lockedStageCount}
+            />
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Activity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {activity.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Nothing yet — your completed lessons and quiz results will show up here.
+                  </p>
+                ) : (
+                  <ul className="grid gap-4">
+                    {activity.map((item) => (
+                      <li key={item.key} className="flex gap-2.5 text-sm">
+                        <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${item.dot}`} />
+                        <div>
+                          <p>{item.message}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatRelativeTime(item.timestamp)}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
       )}
     </div>
   );
