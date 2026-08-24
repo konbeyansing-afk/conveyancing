@@ -8,6 +8,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Library,
+  Award,
   Landmark,
   Workflow,
   MonitorSmartphone,
@@ -26,6 +27,7 @@ export const adminNav: NavItem[] = [
   { title: "Programs", url: "/admin/programs", icon: GraduationCap },
   { title: "Trainees", url: "/admin/trainees", icon: Users },
   { title: "Assessments", url: "/admin/assessments", icon: ClipboardCheck },
+  { title: "Certificates", url: "/admin/certificates", icon: Award },
   { title: "Resources", url: "/admin/resources", icon: FolderOpen },
   { title: "Reports", url: "/admin/reports", icon: BarChart3 },
   { title: "Users", url: "/admin/users", icon: Users },
@@ -34,12 +36,14 @@ export const adminNav: NavItem[] = [
 export const trainerNav: NavItem[] = [
   { title: "Dashboard", url: "/trainer", icon: LayoutDashboard },
   { title: "Trainees", url: "/trainer/trainees", icon: Users },
+  { title: "Certificates", url: "/trainer/certificates", icon: Award },
 ];
 
 export const traineeNav: NavItem[] = [
   { title: "Dashboard", url: "/app", icon: LayoutDashboard },
   { title: "Training Journey", url: "/app/journey", icon: Route },
   { title: "My Courses", url: "/app/courses", icon: BookOpen },
+  { title: "Certificates", url: "/app/certificates", icon: Award },
   { title: "Resource Library", url: "/app/resources", icon: Library },
   { title: "Settlement Calculator", url: "/app/tools/settlement-calculator", icon: Calculator },
   { title: "Practice System", url: "/app/tools/practice-system", icon: MonitorSmartphone },

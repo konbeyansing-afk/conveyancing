@@ -111,6 +111,7 @@ const ADMIN_ROUTES = [
   "/admin/programs",
   "/admin/trainees",
   "/admin/assessments",
+  "/admin/certificates",
   "/admin/reports",
   "/admin/resources",
   "/admin/users",
@@ -120,6 +121,7 @@ const TRAINEE_ROUTES = [
   "/app",
   "/app/courses",
   "/app/journey",
+  "/app/certificates",
   "/app/resources",
   "/app/tools/practice-system",
   "/app/tools/pexa",
@@ -272,7 +274,12 @@ describeIfUp()("Admin navigation actually goes somewhere", () => {
     // course in the main journey program — the admin could not open any of
     // its courses or lessons at all.
     const programs = await prisma.program.findMany({
-      where: { stages: { some: { courses: { some: {} } } } },
+      where: {
+        stages: { some: { courses: { some: {} } } },
+        // Audit fixtures come and go while other suites run; this test is
+        // about the real content library.
+        NOT: { title: { startsWith: "ZZ-AUDIT" } },
+      },
       select: { id: true },
     });
     expect(programs.length).toBeGreaterThan(0);
@@ -299,6 +306,39 @@ describeIfUp()("Admin navigation actually goes somewhere", () => {
 
     const res = await get(`/admin/programs/${otherProgram.id}/courses/${stray.id}`, adminCookie);
     expect(res.status).toBe(404);
+  });
+});
+
+describeIfUp()("The account page is available to every role", () => {
+  it("renders for an admin", async () => {
+    expect((await get("/account", adminCookie)).status).toBe(200);
+  });
+
+  it("renders for a trainee", async () => {
+    expect((await get("/account", traineeCookie)).status).toBe(200);
+  });
+
+  it("redirects an anonymous visitor to the login page", async () => {
+    const res = await get("/account");
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/login");
+  });
+});
+
+describeIfUp()("Certificate verification is public", () => {
+  it("serves the verify page without a session", async () => {
+    const res = await get("/verify/0123456789abcdef0123456789abcdef");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("No certificate matches this code");
+  });
+
+  it("does not leak anything for a malformed code", async () => {
+    const html = await (await get("/verify/nonsense")).text();
+    expect(html).toContain("No certificate matches this code");
+    for (const pattern of [/postgresql:\/\//i, /neondb_owner/i, /PrismaClient/]) {
+      expect(html).not.toMatch(pattern);
+    }
   });
 });
 

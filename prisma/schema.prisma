@@ -47,6 +47,8 @@ model User {
   certificatesIssued     Certificate[]       @relation("IssuedCertificates")
   trainerAssignments     TrainerAssignment[] @relation("TrainerOf")
   assignedTrainers       TrainerAssignment[] @relation("TraineeOf")
+  notesAbout             TraineeNote[]       @relation("NotesAbout")
+  notesWritten           TraineeNote[]       @relation("NotesWritten")
 }
 
 model Program {
@@ -358,6 +360,24 @@ model Certificate {
  * Which trainees a trainer is responsible for. A trainer only ever sees the
  * trainees assigned to them; an admin sees everyone.
  */
+/**
+ * A trainer's running observations about a trainee — the qualitative half of
+ * supervision that progress percentages cannot carry. Visible to trainers and
+ * admins, never to the trainee it is about.
+ */
+model TraineeNote {
+  id        String   @id @default(cuid())
+  traineeId String
+  trainee   User     @relation("NotesAbout", fields: [traineeId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation("NotesWritten", fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([traineeId, createdAt])
+}
+
 model TrainerAssignment {
   id         String   @id @default(cuid())
   trainerId  String

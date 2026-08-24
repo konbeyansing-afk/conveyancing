@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/require-role";
 import { uniqueSlug } from "@/lib/slugify";
 import { syncCompletionForStage } from "@/lib/completion";
+import { maybeCreateCertificate } from "@/lib/certificates";
 
 function programPath(programId: string) {
   return `/admin/programs/${programId}`;
@@ -119,7 +120,8 @@ export async function approveStageForTrainee(programId: string, stageId: string,
   });
 
   // Sign-off may have been the last thing the stage was waiting for.
-  await syncCompletionForStage(stageId, userId);
+  const sync = await syncCompletionForStage(stageId, userId);
+  if (sync.programCompleted) await maybeCreateCertificate(userId, sync.programCompleted.id);
 
   revalidatePath(programPath(programId));
 }

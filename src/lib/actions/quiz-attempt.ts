@@ -6,6 +6,7 @@ import { canPreviewUnpublished } from "@/lib/can-preview-unpublished";
 import { isEnrolledInCourse } from "@/lib/is-enrolled-in-course";
 import { isStageUnlockedForUser, isCoursePublished, isStageComplete } from "@/lib/stage-access";
 import { syncCompletionForStage } from "@/lib/completion";
+import { maybeCreateCertificate } from "@/lib/certificates";
 
 export type QuestionResult = {
   questionId: string;
@@ -109,7 +110,10 @@ export async function submitQuizAttempt(
 
   // A passing attempt can satisfy a stage's gating quiz, which can in turn
   // complete the stage and the program.
-  if (quiz.course.stage) await syncCompletionForStage(quiz.course.stage.id, userId);
+  if (quiz.course.stage) {
+    const sync = await syncCompletionForStage(quiz.course.stage.id, userId);
+    if (sync.programCompleted) await maybeCreateCertificate(userId, sync.programCompleted.id);
+  }
 
   if (
     quiz.course.stage &&

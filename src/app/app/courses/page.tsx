@@ -13,6 +13,15 @@ export default async function TraineeCoursesPage() {
   const userId = session!.user.id;
   const firstName = (session!.user.name ?? "there").split(" ")[0];
 
+  const certificateCounts = await prisma.certificate.groupBy({
+    by: ["status"],
+    where: { userId },
+    _count: true,
+  });
+  const issuedCertificates = certificateCounts.find((c) => c.status === "ISSUED")?._count ?? 0;
+  const pendingCertificates =
+    certificateCounts.find((c) => c.status === "PENDING_APPROVAL")?._count ?? 0;
+
   const allEnrollments = await prisma.enrollment.findMany({
     where: { userId },
     orderBy: { enrolledAt: "desc" },
@@ -105,7 +114,18 @@ export default async function TraineeCoursesPage() {
           hint="Great work"
           tone="success"
         />
-        <StatTile icon={Award} value={0} label="Certificates" hint="Coming soon" />
+        <StatTile
+          icon={Award}
+          value={issuedCertificates}
+          label="Certificates"
+          hint={
+            pendingCertificates > 0
+              ? `${pendingCertificates} awaiting sign-off`
+              : issuedCertificates > 0
+                ? "Earned"
+                : "Finish a program to earn one"
+          }
+        />
       </div>
 
       <CoursesExplorer courses={courses} />

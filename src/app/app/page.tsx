@@ -17,7 +17,7 @@ export default async function TraineeDashboardPage() {
   const userId = session!.user.id;
   const firstName = (session!.user.name ?? "there").split(" ")[0];
 
-  const [program, recentCompletions, recentQuizAttempts] = await Promise.all([
+  const [program, recentCompletions, recentQuizAttempts, certificateCounts] = await Promise.all([
     getPrimaryProgramForUser(userId),
     prisma.lessonProgress.findMany({
       where: { userId, completedAt: { not: null } },
@@ -31,7 +31,13 @@ export default async function TraineeDashboardPage() {
       take: 5,
       include: { quiz: { select: { title: true } } },
     }),
+    prisma.certificate.groupBy({ by: ["status"], where: { userId }, _count: true }),
   ]);
+
+  const issuedCertificates =
+    certificateCounts.find((c) => c.status === "ISSUED")?._count ?? 0;
+  const pendingCertificates =
+    certificateCounts.find((c) => c.status === "PENDING_APPROVAL")?._count ?? 0;
 
   const stages = program ? await getJourneyForUser(program.id, userId) : [];
   const currentStage = stages.find((s) => s.status === "current");
@@ -89,7 +95,18 @@ export default async function TraineeDashboardPage() {
           hint="Across all stages"
           tone="warning"
         />
-        <StatTile icon={Award} value={0} label="Certificates" hint="Coming soon" />
+        <StatTile
+          icon={Award}
+          value={issuedCertificates}
+          label="Certificates"
+          hint={
+            pendingCertificates > 0
+              ? `${pendingCertificates} awaiting sign-off`
+              : issuedCertificates > 0
+                ? "Earned"
+                : "Finish a program to earn one"
+          }
+        />
       </div>
 
       {stages.length === 0 ? (

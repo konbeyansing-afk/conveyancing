@@ -2,9 +2,10 @@ import { Users, UserCheck, TrendingUp } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { StatCard } from "@/components/admin/stat-card";
 import { TraineesTable, type TraineeSummary } from "@/components/admin/trainees-table";
+import { TrainerAssignmentsCard } from "@/components/admin/trainer-assignments-card";
 
 export default async function AdminTraineesPage() {
-  const [trainees, completedProgress, quizAttempts] = await Promise.all([
+  const [trainees, completedProgress, quizAttempts, trainers] = await Promise.all([
     prisma.user.findMany({
       where: { role: "TRAINEE" },
       orderBy: { name: "asc" },
@@ -28,6 +29,18 @@ export default async function AdminTraineesPage() {
     prisma.quizAttempt.findMany({
       where: { submittedAt: { not: null } },
       select: { userId: true, submittedAt: true },
+    }),
+    prisma.user.findMany({
+      where: { role: "TRAINER" },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        trainerAssignments: {
+          select: { trainee: { select: { id: true, name: true } } },
+        },
+      },
     }),
   ]);
 
@@ -94,6 +107,16 @@ export default async function AdminTraineesPage() {
         <StatCard label="Enrolled in a course" value={enrolledCount} icon={UserCheck} tone="success" />
         <StatCard label="Avg. progress" value={`${overallAvg}%`} icon={TrendingUp} />
       </div>
+
+      <TrainerAssignmentsCard
+        trainers={trainers.map((trainer) => ({
+          id: trainer.id,
+          name: trainer.name,
+          email: trainer.email,
+          trainees: trainer.trainerAssignments.map((a) => a.trainee),
+        }))}
+        trainees={summaries.map((t) => ({ id: t.id, name: t.name, email: t.email }))}
+      />
 
       <TraineesTable trainees={summaries} />
     </div>

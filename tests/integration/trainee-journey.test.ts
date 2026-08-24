@@ -309,7 +309,7 @@ describe("Enrolment gates access, not publication alone", () => {
 });
 
 describe("Quiz-gated stages", () => {
-  it("grades an attempt and only completes the stage on a passing score", async () => {
+  it("grades an attempt and only completes the stage on a passing score", { timeout: 60_000 }, async () => {
     // A separate program so the gating rules do not disturb the journey fixture.
     const program = await createProgram({ isPublished: true });
     const stageA = await createStage(program.id, { order: 0, title: "Quiz Stage" });
@@ -392,7 +392,7 @@ describe("Quiz-gated stages", () => {
     expect(attempts).toBe(2);
   });
 
-  it("blocks a PASS_QUIZ lesson until the quiz has actually been passed", async () => {
+  it("blocks a PASS_QUIZ lesson until the quiz has actually been passed", { timeout: 60_000 }, async () => {
     const program = await createProgram({ isPublished: true });
     const stage = await createStage(program.id, { order: 0, title: "Assessment Stage" });
     const course = await createCourseWithLessons(program.id, stage.id, {

@@ -6,6 +6,7 @@ import { canPreviewUnpublished } from "@/lib/can-preview-unpublished";
 import { isEnrolledInCourse } from "@/lib/is-enrolled-in-course";
 import { isStageUnlockedForUser, isCoursePublished, isStageComplete } from "@/lib/stage-access";
 import { syncCompletionForLesson } from "@/lib/completion";
+import { maybeCreateCertificate } from "@/lib/certificates";
 
 export type MarkLessonCompleteResult = {
   ok: boolean;
@@ -77,6 +78,12 @@ export async function markLessonComplete(lessonId: string): Promise<MarkLessonCo
   // Milestones are recorded from what is now actually true, never from the fact
   // that this action was reached.
   const sync = await syncCompletionForLesson(lessonId, userId);
+
+  // Finishing the program puts a certificate in front of a trainer for
+  // sign-off. It is never issued automatically.
+  if (sync.programCompleted) {
+    await maybeCreateCertificate(userId, sync.programCompleted.id);
+  }
 
   if (course.stage && !wasStageComplete && (await isStageComplete(course.stage.id, userId))) {
     return {

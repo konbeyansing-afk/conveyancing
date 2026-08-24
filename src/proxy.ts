@@ -14,8 +14,11 @@ export default auth((req) => {
   const role = req.auth?.user?.role;
   const isLoggedIn = !!req.auth;
   const isAuthPage = pathname.startsWith("/login");
+  // Certificate verification is for people outside the organisation — a
+  // prospective employer checking a code has no account here.
+  const isPublicPage = pathname.startsWith("/verify");
 
-  if (!isLoggedIn && !isAuthPage) {
+  if (!isLoggedIn && !isAuthPage && !isPublicPage) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);

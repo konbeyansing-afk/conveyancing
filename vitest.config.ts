@@ -16,9 +16,12 @@ export default defineConfig({
     globals: false,
     environment: "node",
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
-    // Integration tests share one Neon database; running files in parallel
-    // makes their fixtures race. Unit tests are pure and unaffected.
-    fileParallelism: false,
+    // Test files run in parallel. The database-backed suites can share one
+    // Neon database safely because every fixture is namespaced with a per-file
+    // run id and each suite only ever deletes ids it created — and the remote
+    // database's latency, not CPU, is what makes them slow, so overlapping
+    // them is most of the win.
+    fileParallelism: true,
     testTimeout: 30_000,
     hookTimeout: 60_000,
   },
