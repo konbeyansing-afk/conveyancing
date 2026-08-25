@@ -58,7 +58,7 @@ import { cn } from "@/lib/utils";
 /* Primitives                                                          */
 /* ------------------------------------------------------------------ */
 
-function AsButton({
+export function AsButton({
   children,
   onClick,
   disabled,
@@ -94,7 +94,7 @@ function AsButton({
   );
 }
 
-function AsInput({ className, ...props }: React.ComponentProps<"input">) {
+export function AsInput({ className, ...props }: React.ComponentProps<"input">) {
   return (
     <input
       {...props}
@@ -106,7 +106,7 @@ function AsInput({ className, ...props }: React.ComponentProps<"input">) {
   );
 }
 
-function AsSelect({ className, children, ...props }: React.ComponentProps<"select">) {
+export function AsSelect({ className, children, ...props }: React.ComponentProps<"select">) {
   return (
     <select
       {...props}
@@ -120,11 +120,11 @@ function AsSelect({ className, children, ...props }: React.ComponentProps<"selec
   );
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+export function FieldLabel({ children }: { children: React.ReactNode }) {
   return <span className="block text-[11px] font-semibold text-[#64748b]">{children}</span>;
 }
 
-function Panel({
+export function Panel({
   title,
   actions,
   children,

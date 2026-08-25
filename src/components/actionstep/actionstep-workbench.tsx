@@ -12,14 +12,17 @@ import {
   PanelRightOpen,
   RotateCcw,
   Search,
+  Target,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TaskPanel } from "@/components/training/task-panel";
 import { AS_GUIDED_TASKS } from "@/lib/actionstep/guided-tasks";
 import { ActionstepProvider, type GlobalScreen, useActionstep } from "@/lib/actionstep/store";
+import { DrillRunnerProvider, useDrillRunner } from "@/lib/training/drill";
 import { TaskRunnerProvider, useTaskRunner } from "@/lib/training/runner";
 import { cn } from "@/lib/utils";
+import { ActionstepDrillsScreen } from "./actionstep-drills";
 import {
   ActionstepContactsScreen,
   ActionstepCreateMatter,
@@ -42,6 +45,8 @@ function ScreenSwitch() {
       return <ActionstepTasksScreen />;
     case "contacts":
       return <ActionstepContactsScreen />;
+    case "drills":
+      return <ActionstepDrillsScreen />;
     case "home":
     default:
       return <ActionstepHome />;
@@ -60,6 +65,7 @@ const GLOBAL_ITEMS: { key: GlobalScreen; label: string; icon: LucideIcon }[] = [
   { key: "matters", label: "Matters", icon: Search },
   { key: "tasks", label: "Tasks", icon: ListChecks },
   { key: "contacts", label: "Contacts", icon: BookUser },
+  { key: "drills", label: "Practice", icon: Target },
 ];
 
 function GlobalNav() {
@@ -131,6 +137,7 @@ function AsTaskPanel({ onClose }: { onClose: () => void }) {
 function WorkbenchInner() {
   const { dispatch } = useActionstep();
   const { stopTask } = useTaskRunner();
+  const { exit: exitDrill } = useDrillRunner();
   const [panelOpen, setPanelOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -150,9 +157,10 @@ function WorkbenchInner() {
             size="sm"
             variant="ghost"
             onClick={() => {
-            // The running scenario's ticked-off steps describe work that the
-            // reset has just discarded, so drop it too.
+            // The running scenario's ticked-off steps, and any in-progress
+            // drill, describe work that the reset has just discarded.
             stopTask();
+            exitDrill();
             dispatch({ type: "RESET" });
           }}
             title="Reset the simulator back to its starting data"
@@ -189,7 +197,9 @@ export function ActionstepWorkbench() {
   return (
     <ActionstepProvider>
       <TaskRunnerProvider storageKey="conveyancing-academy:task:actionstep">
-        <WorkbenchInner />
+        <DrillRunnerProvider storageKey="conveyancing-academy:drill:actionstep">
+          <WorkbenchInner />
+        </DrillRunnerProvider>
       </TaskRunnerProvider>
     </ActionstepProvider>
   );

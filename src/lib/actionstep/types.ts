@@ -144,11 +144,18 @@ export type AsMatter = {
  * doing something not tied to one file, and — once a matter is open — a
  * second, matter-scoped level underneath it.
  *
- * "home", "matters", "tasks" and "contacts" are the global level; "matter"
- * and "create-matter" are inside one file. The global bar stays visible on
- * every screen, including inside a matter — see GlobalNav.
+ * "home", "matters", "tasks", "contacts" and "drills" are the global level;
+ * "matter" and "create-matter" are inside one file. The global bar stays
+ * visible on every screen, including inside a matter — see GlobalNav.
  */
-export type AsScreen = "home" | "matters" | "tasks" | "contacts" | "matter" | "create-matter";
+export type AsScreen =
+  | "home"
+  | "matters"
+  | "tasks"
+  | "contacts"
+  | "drills"
+  | "matter"
+  | "create-matter";
 
 export type AsTab = "home" | "parties" | "steps" | "filenotes" | "tasks" | "time";
 

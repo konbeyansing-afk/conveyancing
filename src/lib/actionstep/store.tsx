@@ -25,7 +25,7 @@ import {
 } from "./types";
 
 /** The global bar only ever points at one of these — never a matter screen. */
-export type GlobalScreen = "home" | "matters" | "tasks" | "contacts";
+export type GlobalScreen = "home" | "matters" | "tasks" | "contacts" | "drills";
 
 export type NewActionDraft = {
   name: string;

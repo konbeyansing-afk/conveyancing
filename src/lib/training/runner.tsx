@@ -19,6 +19,9 @@ import {
 } from "react";
 import { usePersistentReducer } from "@/lib/training/persist";
 
+/** Shared across guided tasks and drills so both can be filtered/sorted the same way. */
+export type Difficulty = "Beginner" | "Core" | "Advanced";
+
 export type GuidedStepBase = {
   instruction: string;
   hint: string;
@@ -46,7 +49,7 @@ export type GuidedTask<TState> = {
   title: string;
   /** One-line summary for the task list. */
   summary: string;
-  difficulty: "Beginner" | "Core" | "Advanced";
+  difficulty: Difficulty;
   minutes: number;
   /** Realistic instruction as it would arrive from a fee earner. */
   brief: string;
