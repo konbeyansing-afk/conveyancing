@@ -11,6 +11,7 @@
 import { describe, expect, it } from "vitest";
 import { checkDrillField, scoreDrill, type Drill } from "@/lib/training/drill";
 import { AS_DRILLS } from "@/lib/actionstep/drills";
+import { PEXA_DRILLS } from "@/lib/pexa/drills";
 
 describe("checkDrillField — money", () => {
   it("accepts a plain number matching the canonical expected value", () => {
@@ -94,30 +95,36 @@ describe("scoreDrill", () => {
   });
 });
 
-describe("Actionstep drill content", () => {
-  it("ships at least one drill with unique ids", () => {
-    expect(AS_DRILLS.length).toBeGreaterThan(0);
-    expect(new Set(AS_DRILLS.map((d) => d.id)).size).toBe(AS_DRILLS.length);
-  });
+/** Shared content-shape checks, run against every simulator's own drill set. */
+function describeDrillContent(name: string, drills: Drill[]) {
+  describe(`${name} drill content`, () => {
+    it("ships at least one drill with unique ids", () => {
+      expect(drills.length).toBeGreaterThan(0);
+      expect(new Set(drills.map((d) => d.id)).size).toBe(drills.length);
+    });
 
-  it("gives every field an expected value the field itself would accept", () => {
-    for (const drill of AS_DRILLS) {
-      expect(drill.fields.length).toBeGreaterThan(0);
-      for (const field of drill.fields) {
-        const expected = drill.expected[field.key];
-        expect(expected, `${drill.id}.${field.key} has no expected value`).toBeTruthy();
-        expect(checkDrillField(field.type, expected, expected)).toBe(true);
-        if (field.type === "choice") {
-          expect(field.choices ?? []).toContain(expected);
+    it("gives every field an expected value the field itself would accept", () => {
+      for (const drill of drills) {
+        expect(drill.fields.length).toBeGreaterThan(0);
+        for (const field of drill.fields) {
+          const expected = drill.expected[field.key];
+          expect(expected, `${drill.id}.${field.key} has no expected value`).toBeTruthy();
+          expect(checkDrillField(field.type, expected, expected)).toBe(true);
+          if (field.type === "choice") {
+            expect(field.choices ?? []).toContain(expected);
+          }
         }
       }
-    }
-  });
+    });
 
-  it("has a non-empty source document behind every drill", () => {
-    for (const drill of AS_DRILLS) {
-      expect(drill.document.heading.trim().length).toBeGreaterThan(0);
-      expect(drill.document.paragraphs.length).toBeGreaterThan(0);
-    }
+    it("has a non-empty source document behind every drill", () => {
+      for (const drill of drills) {
+        expect(drill.document.heading.trim().length).toBeGreaterThan(0);
+        expect(drill.document.paragraphs.length).toBeGreaterThan(0);
+      }
+    });
   });
-});
+}
+
+describeDrillContent("Actionstep", AS_DRILLS);
+describeDrillContent("PEXA", PEXA_DRILLS);

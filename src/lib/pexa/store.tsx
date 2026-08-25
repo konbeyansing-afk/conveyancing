@@ -45,6 +45,7 @@ export type PexaAction =
   | { type: "SET_TAB"; tab: PexaTab }
   | { type: "OPEN_CREATE_WORKSPACE" }
   | { type: "OPEN_REFERENCE" }
+  | { type: "OPEN_DRILLS" }
   | { type: "CREATE_WORKSPACE"; draft: NewWorkspaceDraft }
   | {
       type: "INVITE_PARTICIPANT";
@@ -137,6 +138,9 @@ export function pexaReducer(state: PexaState, action: PexaAction): PexaState {
 
     case "OPEN_REFERENCE":
       return { ...state, nav: { ...state.nav, screen: "reference" } };
+
+    case "OPEN_DRILLS":
+      return { ...state, nav: { ...state.nav, screen: "drills" } };
 
     case "CREATE_WORKSPACE": {
       const d = action.draft;

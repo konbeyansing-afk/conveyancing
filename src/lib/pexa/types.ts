@@ -155,7 +155,7 @@ export type PexaWorkspace = {
 /* Navigation                                                          */
 /* ------------------------------------------------------------------ */
 
-export type PexaScreen = "dashboard" | "workspace" | "create-workspace" | "reference";
+export type PexaScreen = "dashboard" | "workspace" | "create-workspace" | "reference" | "drills";
 
 export type PexaTab =
   | "summary"

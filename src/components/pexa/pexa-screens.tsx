@@ -70,7 +70,7 @@ function StatusPill({ status }: { status: PexaPrepStatus | string }) {
   );
 }
 
-function PexaButton({
+export function PexaButton({
   children,
   onClick,
   disabled,
@@ -107,7 +107,7 @@ function PexaButton({
   );
 }
 
-function PexaInput({ className, ...props }: React.ComponentProps<"input">) {
+export function PexaInput({ className, ...props }: React.ComponentProps<"input">) {
   return (
     <input
       {...props}
@@ -119,7 +119,7 @@ function PexaInput({ className, ...props }: React.ComponentProps<"input">) {
   );
 }
 
-function PexaSelect({ className, children, ...props }: React.ComponentProps<"select">) {
+export function PexaSelect({ className, children, ...props }: React.ComponentProps<"select">) {
   return (
     <select
       {...props}
@@ -133,13 +133,13 @@ function PexaSelect({ className, children, ...props }: React.ComponentProps<"sel
   );
 }
 
-function Label({ children }: { children: React.ReactNode }) {
+export function Label({ children }: { children: React.ReactNode }) {
   return (
     <span className="block text-[11px] font-semibold text-[#5b7286]">{children}</span>
   );
 }
 
-function Card({
+export function Card({
   title,
   actions,
   children,

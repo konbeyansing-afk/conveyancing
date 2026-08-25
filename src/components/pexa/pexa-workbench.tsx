@@ -3,13 +3,15 @@
 /** Root of the PEXA simulator: workspace app plus the shared training panel. */
 
 import { useState } from "react";
-import { Maximize2, Minimize2, PanelRightOpen, RotateCcw } from "lucide-react";
+import { Maximize2, Minimize2, PanelRightOpen, RotateCcw, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TaskPanel } from "@/components/training/task-panel";
 import { PEXA_GUIDED_TASKS } from "@/lib/pexa/guided-tasks";
 import { PexaProvider, usePexa } from "@/lib/pexa/store";
+import { DrillRunnerProvider, useDrillRunner } from "@/lib/training/drill";
 import { TaskRunnerProvider, useTaskRunner } from "@/lib/training/runner";
 import { cn } from "@/lib/utils";
+import { PexaDrillsScreen } from "./pexa-drills";
 import { PexaReference } from "./pexa-reference";
 import { PexaCreateWorkspace, PexaDashboard, PexaWorkspaceScreen } from "./pexa-screens";
 
@@ -22,6 +24,8 @@ function ScreenSwitch() {
       return <PexaCreateWorkspace />;
     case "reference":
       return <PexaReference />;
+    case "drills":
+      return <PexaDrillsScreen />;
     default:
       return <PexaDashboard />;
   }
@@ -42,8 +46,16 @@ function PexaTopBar() {
       <span className="text-[12px] text-white/60">Exchange</span>
       <button
         type="button"
+        onClick={() => dispatch({ type: "OPEN_DRILLS" })}
+        className="ml-auto inline-flex items-center gap-1 text-[12px] text-white/75 hover:text-white"
+      >
+        <Target className="size-3.5" />
+        Practice
+      </button>
+      <button
+        type="button"
         onClick={() => dispatch({ type: "OPEN_REFERENCE" })}
-        className="ml-auto text-[12px] text-white/75 hover:text-white"
+        className="text-[12px] text-white/75 hover:text-white"
       >
         Reference
       </button>
@@ -77,6 +89,7 @@ function PexaTaskPanel({ onClose }: { onClose: () => void }) {
 function WorkbenchInner() {
   const { dispatch } = usePexa();
   const { stopTask } = useTaskRunner();
+  const { exit: exitDrill } = useDrillRunner();
   const [panelOpen, setPanelOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -96,9 +109,10 @@ function WorkbenchInner() {
             size="sm"
             variant="ghost"
             onClick={() => {
-            // The running scenario's ticked-off steps describe work that the
-            // reset has just discarded, so drop it too.
+            // The running scenario's ticked-off steps, and any in-progress
+            // drill, describe work that the reset has just discarded.
             stopTask();
+            exitDrill();
             dispatch({ type: "RESET" });
           }}
             title="Reset the simulator back to its starting data"
@@ -134,7 +148,9 @@ export function PexaWorkbench() {
   return (
     <PexaProvider>
       <TaskRunnerProvider storageKey="conveyancing-academy:task:pexa">
-        <WorkbenchInner />
+        <DrillRunnerProvider storageKey="conveyancing-academy:drill:pexa">
+          <WorkbenchInner />
+        </DrillRunnerProvider>
       </TaskRunnerProvider>
     </PexaProvider>
   );
