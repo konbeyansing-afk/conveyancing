@@ -1,18 +1,21 @@
 "use client";
 
 /**
- * Session-scoped persistence for the simulators.
+ * Storage-backed persistence for reducer-driven tools.
  *
  * A trainee halfway through a guided task should not lose the matter they just
  * created because they refreshed the page or followed a link and came back.
- * Each simulator keeps its state in a plain reducer, so this wraps the reducer
- * rather than changing any of them: state is written to sessionStorage on
- * every change and read back once on mount.
+ * Each tool keeps its state in a plain reducer, so this wraps the reducer
+ * rather than changing any of them: state is written to storage on every
+ * change and read back once on mount.
  *
- * sessionStorage, not localStorage: the simulators are a sandbox, so the work
- * should survive a refresh and a navigation but not outlive the browser tab.
- * Nothing here is real client data, but a training sandbox that quietly
- * remembers last month's practice run is confusing rather than helpful.
+ * Defaults to sessionStorage: the training simulators are a sandbox, so the
+ * work should survive a refresh and a navigation but not outlive the browser
+ * tab — a training sandbox that quietly remembers last month's practice run
+ * is confusing rather than helpful. Tools where the state is a real working
+ * document a colleague returns to over hours or days (e.g. the settlement
+ * calculator) should pass `{ storage: "local" }` instead, so it survives
+ * closing the tab too.
  */
 
 import { useCallback, useEffect, useReducer, useRef, type Dispatch } from "react";
@@ -31,7 +34,10 @@ export function usePersistentReducer<S, A extends { type: string }>(
   storageKey: string,
   reducer: (state: S, action: A) => S,
   init: () => S,
+  options?: { storage?: "session" | "local" },
 ): [S, Dispatch<A>] {
+  const storageArea = options?.storage === "local" ? "localStorage" : "sessionStorage";
+
   const wrapped = useCallback(
     (state: S, action: A | HydrateAction<S>): S =>
       action.type === HYDRATE
@@ -48,33 +54,34 @@ export function usePersistentReducer<S, A extends { type: string }>(
     if (hydrated.current) return;
     hydrated.current = true;
     try {
-      const stored = window.sessionStorage.getItem(storageKey);
+      const stored = window[storageArea].getItem(storageKey);
       if (stored) dispatch({ type: HYDRATE, state: JSON.parse(stored) as S });
     } catch {
       // Corrupt or unavailable storage: carry on with the seed rather than
-      // failing the whole simulator.
+      // failing the whole tool.
     }
-  }, [storageKey]);
+  }, [storageKey, storageArea]);
 
   useEffect(() => {
     // Skip the very first write so a fresh tab does not immediately overwrite
     // whatever a previous render of this key stored.
     if (!hydrated.current) return;
     try {
-      window.sessionStorage.setItem(storageKey, JSON.stringify(state));
+      window[storageArea].setItem(storageKey, JSON.stringify(state));
     } catch {
-      // Quota exceeded or storage blocked — the simulator still works, it just
+      // Quota exceeded or storage blocked — the tool still works, it just
       // will not survive a refresh.
     }
-  }, [storageKey, state]);
+  }, [storageKey, storageArea, state]);
 
   return [state, dispatch as Dispatch<A>];
 }
 
-/** Drops a simulator's stored state, for the Reset control. */
-export function clearPersistedState(storageKey: string) {
+/** Drops a tool's stored state, for a Reset/New control. */
+export function clearPersistedState(storageKey: string, options?: { storage?: "session" | "local" }) {
+  const storageArea = options?.storage === "local" ? "localStorage" : "sessionStorage";
   try {
-    window.sessionStorage.removeItem(storageKey);
+    window[storageArea].removeItem(storageKey);
   } catch {
     // Nothing to do — the in-memory reset still happens.
   }

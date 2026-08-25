@@ -320,3 +320,13 @@
   background-color: var(--mf-eucalyptus-soft);
   color: var(--mf-eucalyptus);
 }
+
+/* Printing a page (e.g. the settlement calculator's Export/Print button)
+   should never include the app's own navigation chrome. Targeted by
+   data-slot rather than a wrapper element, so it can't disturb the sidebar's
+   flex/grid layout during normal (non-print) use. */
+@media print {
+  [data-slot="sidebar-wrapper"] > [data-slot="sidebar"] {
+    display: none;
+  }
+}
