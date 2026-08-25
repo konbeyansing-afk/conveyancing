@@ -138,7 +138,17 @@ export type AsMatter = {
 /* Navigation                                                          */
 /* ------------------------------------------------------------------ */
 
-export type AsScreen = "dashboard" | "matter" | "create-matter";
+/**
+ * The system has two levels of navigation, and telling them apart is the
+ * whole trick to finding anything: a global bar for moving between matters or
+ * doing something not tied to one file, and — once a matter is open — a
+ * second, matter-scoped level underneath it.
+ *
+ * "home", "matters", "tasks" and "contacts" are the global level; "matter"
+ * and "create-matter" are inside one file. The global bar stays visible on
+ * every screen, including inside a matter — see GlobalNav.
+ */
+export type AsScreen = "home" | "matters" | "tasks" | "contacts" | "matter" | "create-matter";
 
 export type AsTab = "home" | "parties" | "steps" | "filenotes" | "tasks" | "time";
 
@@ -148,13 +158,19 @@ export type AsNav = {
   tab: AsTab;
 };
 
+/** The Matters screen defaults to hiding closed files — same as a real system, and the reason a matter can look "missing" when it's really just filtered out. */
+export type MatterStatusFilter = AsMatter["status"] | "All";
+
 /* ------------------------------------------------------------------ */
 /* Action log                                                          */
 /* ------------------------------------------------------------------ */
 
 export type AsLogType =
+  | "nav.global"
   | "nav.matter.open"
   | "nav.tab"
+  | "matters.filter"
+  | "matter.star"
   | "matter.create"
   | "participant.add"
   | "datafield.set"
@@ -180,6 +196,10 @@ export type AsState = {
   fileNotes: AsFileNote[];
   tasks: AsTask[];
   timeEntries: AsTimeEntry[];
+  /** Matters pinned to the Home screen's "Starred" panel — a personal shortlist, not part of any file. */
+  starredMatterIds: string[];
+  /** The Matters screen's own filter state, kept in the store (not component state) so a guided scenario can observe whether it was ever changed. */
+  matterListFilter: { status: MatterStatusFilter };
   nav: AsNav;
   log: AsLogEntry[];
 };

@@ -22,7 +22,13 @@ export default defineConfig({
     // database's latency, not CPU, is what makes them slow, so overlapping
     // them is most of the win.
     fileParallelism: true,
-    testTimeout: 30_000,
+    // Individual DB-backed tests have hit the previous 30s default three
+    // times now as the suite grew, purely from added contention under
+    // fileParallelism — never a genuine hang. 60s stays a real hang detector
+    // for a suite whose bottleneck is a remote database's round-trip time,
+    // not CPU. A test heavier than this on its own can still opt into a
+    // higher per-test timeout.
+    testTimeout: 60_000,
     hookTimeout: 60_000,
   },
 });

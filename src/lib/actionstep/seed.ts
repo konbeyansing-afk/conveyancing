@@ -342,6 +342,53 @@ const matters: AsMatter[] = [
     openedAt: "2026-08-04",
     assignedTo: "Jennie Tonner",
   },
+  {
+    id: "am-4",
+    actionId: 10441,
+    // A finished file. The Matters screen defaults to hiding Closed matters,
+    // so this one exists specifically to be the thing that isn't there when
+    // you go looking for it — see the "Find a matter that isn't there"
+    // scenario.
+    name: "Nakamura — Sale of 22 Silverwater Lane, Hornsby",
+    matterType: "Conveyancing — Sale",
+    status: "Closed",
+    currentStepId: "s-6",
+    stepHistory: [
+      { id: "sh-11", stepId: "s-1", enteredAt: "2026-04-02", exitedAt: "2026-04-09" },
+      { id: "sh-12", stepId: "s-2", enteredAt: "2026-04-09", exitedAt: "2026-04-30" },
+      { id: "sh-13", stepId: "s-3", enteredAt: "2026-04-30", exitedAt: "2026-05-14" },
+      { id: "sh-14", stepId: "s-4", enteredAt: "2026-05-14", exitedAt: "2026-06-08" },
+      { id: "sh-15", stepId: "s-5", enteredAt: "2026-06-08", exitedAt: "2026-06-12" },
+      { id: "sh-16", stepId: "s-6", enteredAt: "2026-06-12", exitedAt: null },
+    ],
+    participants: [
+      {
+        id: "ap-8",
+        name: "Sora Nakamura",
+        participantType: "Client",
+        email: "sora.nakamura@examplemail.com",
+        phone: "+61 407 220 981",
+      },
+      {
+        id: "ap-9",
+        name: "Devon Ashwell — Ashwell & Co",
+        participantType: "Other Side Lawyer",
+        email: "devon@ashwellco.example",
+        phone: "02 9887 1200",
+      },
+    ],
+    dataValues: {
+      instructionsDate: "2026-04-02",
+      listingPrice: "980000",
+      vendorDisclosure: "Yes",
+      exchangeDate: "2026-04-28",
+      settlementDate: "2026-06-12",
+      dischargeSent: "Yes",
+      settledOn: "2026-06-12",
+    },
+    openedAt: "2026-04-02",
+    assignedTo: "Shane Capati",
+  },
 ];
 
 const fileNotes: AsFileNote[] = [
@@ -358,6 +405,13 @@ const fileNotes: AsFileNote[] = [
     text: "Lender confirmed the discharge will be ready three business days before settlement.",
     author: "Shane Capati",
     createdAt: "2026-08-12",
+  },
+  {
+    id: "fn-3",
+    matterId: "am-4",
+    text: "Settled without incident. Final report and invoice sent to client; file archived.",
+    author: "Shane Capati",
+    createdAt: "2026-06-12",
   },
 ];
 
@@ -398,6 +452,24 @@ const tasks: AsTask[] = [
     completedOn: null,
     fromStepId: "p-2",
   },
+  {
+    id: "at-5",
+    matterId: "am-4",
+    name: "Send final report to client",
+    assignedTo: "Shane Capati",
+    dueOn: "2026-06-15",
+    completedOn: "2026-06-13",
+    fromStepId: "s-6",
+  },
+  {
+    id: "at-6",
+    matterId: "am-4",
+    name: "Archive file",
+    assignedTo: "Shane Capati",
+    dueOn: "2026-06-15",
+    completedOn: "2026-06-13",
+    fromStepId: "s-6",
+  },
 ];
 
 const timeEntries: AsTimeEntry[] = [
@@ -437,7 +509,11 @@ export function createAsSeedState(): AsState {
     fileNotes: [...fileNotes],
     tasks: [...tasks],
     timeEntries: [...timeEntries],
-    nav: { screen: "dashboard", matterId: null, tab: "home" },
+    // The Beltran purchase is the one actively being chased, so it starts
+    // starred — same as a VA would pin the file they're mid-way through.
+    starredMatterIds: ["am-1"],
+    matterListFilter: { status: "Active" },
+    nav: { screen: "home", matterId: null, tab: "home" },
     log: [],
   };
 }

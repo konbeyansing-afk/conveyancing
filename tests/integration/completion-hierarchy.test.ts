@@ -62,7 +62,7 @@ async function recordCount(scope: "MODULE" | "COURSE" | "STAGE" | "PROGRAM", use
 /* ================================================================== */
 
 describe("Module completion", () => {
-  it("requires every published lesson in the module", async () => {
+  it("requires every published lesson in the module", { timeout: 60_000 }, async () => {
     const program = await createProgram({ isPublished: true });
     const stage = await createStage(program.id, { order: 0, title: "Mod Stage" });
     const course = await createCourseWithLessons(program.id, stage.id, {

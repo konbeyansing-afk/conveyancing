@@ -163,7 +163,7 @@ describe("Creating the record", () => {
     expect(after.programTitle).toBe(program.title);
   });
 
-  it("gives every certificate a unique number and verification code", async () => {
+  it("gives every certificate a unique number and verification code", { timeout: 60_000 }, async () => {
     const first = await makeProgram("Unique One");
     await finish(first.lessons);
     const second = await makeProgram("Unique Two");

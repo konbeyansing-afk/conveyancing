@@ -339,8 +339,18 @@ describe("Actionstep — guided scenarios are completable", () => {
     assertActionSteps("as-full-cycle", AS_GUIDED_TASKS, state);
   });
 
+  it("as-find-missing-matter", () => {
+    const state = asRun(
+      createAsSeedState(),
+      { type: "NAV_GLOBAL", screen: "matters" },
+      { type: "SET_MATTER_FILTER", status: "All" },
+      { type: "OPEN_MATTER", matterId: "am-4" },
+    );
+    assertActionSteps("as-find-missing-matter", AS_GUIDED_TASKS, state);
+  });
+
   it("covers every Actionstep scenario that ships", () => {
-    expect(AS_GUIDED_TASKS).toHaveLength(7);
+    expect(AS_GUIDED_TASKS).toHaveLength(8);
   });
 });
 
@@ -355,8 +365,8 @@ const ALL_SCENARIOS: { simulator: string; tasks: GuidedTask<never>[] }[] = [
 ];
 
 describe("Guided training engine — scenario definitions are well formed", () => {
-  it("ships 27 scenarios in total", () => {
-    expect(ALL_SCENARIOS.reduce((n, s) => n + s.tasks.length, 0)).toBe(27);
+  it("ships 28 scenarios in total", () => {
+    expect(ALL_SCENARIOS.reduce((n, s) => n + s.tasks.length, 0)).toBe(28);
   });
 
   it("uses globally unique scenario ids", () => {

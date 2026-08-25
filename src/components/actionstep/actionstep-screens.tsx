@@ -11,18 +11,24 @@
 import { useState } from "react";
 import {
   ArrowLeft,
+  BookUser,
   Check,
   ChevronRight,
   CircleCheck,
   Clock,
+  Filter,
   FileText,
+  GitBranch,
+  LayoutDashboard,
   ListChecks,
   Lock,
   Plus,
+  Star,
   StickyNote,
   TriangleAlert,
   UserPlus,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { AS_STAFF } from "@/lib/actionstep/seed";
 import {
@@ -40,7 +46,9 @@ import {
   stepBlockers,
   stepsFor,
   type AsMatter,
+  type AsState,
   type AsTab,
+  type MatterStatusFilter,
   type MatterType,
   type ParticipantType,
 } from "@/lib/actionstep/types";
@@ -146,9 +154,154 @@ function Panel({
 /* Dashboard                                                           */
 /* ------------------------------------------------------------------ */
 
-export function ActionstepDashboard() {
+function StarButton({
+  matterId,
+  starred,
+  className,
+}: {
+  matterId: string;
+  starred: boolean;
+  className?: string;
+}) {
+  const { dispatch } = useActionstep();
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        dispatch({ type: "TOGGLE_STAR", matterId });
+      }}
+      aria-label={starred ? "Unstar this matter" : "Star this matter"}
+      title={starred ? "Unstar this matter" : "Star this matter"}
+      className={cn("shrink-0", className)}
+    >
+      <Star
+        className={cn(
+          "size-3.5",
+          starred ? "fill-[#e2622c] text-[#e2622c]" : "text-[#cbd5e1] hover:text-[#94a3b8]",
+        )}
+      />
+    </button>
+  );
+}
+
+/**
+ * The Home screen — the landing page, not a menu. Three panels, each backed
+ * by real state: matters you've pinned, tasks assigned to you, and matters
+ * you've opened recently. Starring a file you're actively working saves the
+ * re-searching; unstar it once you're done or the list stops being useful.
+ */
+export function ActionstepHome() {
   const { state, dispatch } = useActionstep();
-  const openTasks = state.tasks.filter((t) => !t.completedOn);
+  const starred = state.matters.filter((m) => state.starredMatterIds.includes(m.id));
+  const myTasks = state.tasks.filter((t) => t.assignedTo === state.user.name && !t.completedOn);
+
+  const recentIds: string[] = [];
+  for (const l of [...state.log].reverse()) {
+    if (l.type === "nav.matter.open" && l.matterId && !recentIds.includes(l.matterId)) {
+      recentIds.push(l.matterId);
+      if (recentIds.length >= 5) break;
+    }
+  }
+  const recent = recentIds
+    .map((id) => state.matters.find((m) => m.id === id))
+    .filter((m): m is AsMatter => !!m);
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto bg-[#f1f5f9] p-4">
+      <div className="mx-auto grid max-w-[1080px] gap-4">
+        <h2 className="text-[17px] font-semibold text-[#0f172a]">Home</h2>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-3">
+          <Panel title={`Starred matters (${starred.length})`}>
+            {starred.length === 0 ? (
+              <p className="p-3 text-[12px] text-[#64748b]">
+                Star a matter from its page to pin it here — the three or four files you&apos;re
+                actually working on today.
+              </p>
+            ) : (
+              starred.map((m) => (
+                <div
+                  key={m.id}
+                  onClick={() => dispatch({ type: "OPEN_MATTER", matterId: m.id })}
+                  className="flex cursor-pointer items-center gap-2 border-b border-[#f1f5f9] px-3 py-2 last:border-b-0 hover:bg-[#f8fafc]"
+                >
+                  <StarButton matterId={m.id} starred />
+                  <span className="min-w-0 flex-1 text-[12px] text-[#0f172a]">{m.name}</span>
+                </div>
+              ))
+            )}
+          </Panel>
+
+          <Panel title={`My tasks (${myTasks.length})`}>
+            {myTasks.length === 0 ? (
+              <p className="p-3 text-[12px] text-[#64748b]">
+                Nothing outstanding assigned to you.
+              </p>
+            ) : (
+              myTasks.slice(0, 6).map((t) => {
+                const m = state.matters.find((x) => x.id === t.matterId);
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-2.5 border-b border-[#f1f5f9] px-3 py-2 last:border-b-0"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={false}
+                      onChange={() => dispatch({ type: "TOGGLE_TASK", taskId: t.id })}
+                      className="size-3.5 accent-[#e2622c]"
+                    />
+                    <span className="min-w-0 flex-1 text-[12px]">
+                      <span className="block text-[#0f172a]">{t.name}</span>
+                      <span className="block text-[11px] text-[#64748b]">
+                        {m?.name} · {t.dueOn ? `due ${formatAuDate(t.dueOn)}` : "no due date"}
+                      </span>
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </Panel>
+
+          <Panel title="Recently opened">
+            {recent.length === 0 ? (
+              <p className="p-3 text-[12px] text-[#64748b]">
+                Matters you open will show up here — the fastest way back to something you had
+                open yesterday.
+              </p>
+            ) : (
+              recent.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => dispatch({ type: "OPEN_MATTER", matterId: m.id })}
+                  className="flex w-full items-center gap-2 border-b border-[#f1f5f9] px-3 py-2 text-left last:border-b-0 hover:bg-[#f8fafc]"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-[#0f172a]">
+                    {m.name}
+                  </span>
+                </button>
+              ))
+            )}
+          </Panel>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const MATTER_STATUS_OPTIONS: MatterStatusFilter[] = ["All", "Active", "On Hold", "Closed"];
+
+/**
+ * The Matters screen — the full list, with Views and Filters. It defaults to
+ * Active only, same as a real system, which is exactly why a matter can look
+ * like it's vanished when it's really just been filed as Closed.
+ */
+export function ActionstepMattersList() {
+  const { state, dispatch } = useActionstep();
+  const filter = state.matterListFilter.status;
+  const filtered = state.matters.filter((m) => filter === "All" || m.status === filter);
+  const filterActive = filter !== "All";
 
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-[#f1f5f9] p-4">
@@ -161,80 +314,266 @@ export function ActionstepDashboard() {
           </AsButton>
         </div>
 
-        <Panel title={`My matters (${state.matters.length})`}>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-[12px]">
-              <thead>
-                <tr className="border-b border-[#eef2f6] text-left text-[11px] font-semibold text-[#64748b]">
-                  <th className="px-3 py-2">Action ID</th>
-                  <th className="px-3 py-2">Matter name</th>
-                  <th className="px-3 py-2">Matter type</th>
-                  <th className="px-3 py-2">Current step</th>
-                  <th className="px-3 py-2">Assigned to</th>
-                  <th className="px-3 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.matters.map((m) => {
-                  const step = currentStep(state, m);
-                  const blocked = !canLeaveStep(m, step);
-                  return (
-                    <tr
-                      key={m.id}
-                      onClick={() => dispatch({ type: "OPEN_MATTER", matterId: m.id })}
-                      className="cursor-pointer border-b border-[#f1f5f9] last:border-b-0 hover:bg-[#f8fafc]"
-                    >
-                      <td className="px-3 py-2 font-semibold text-[#e2622c]">{m.actionId}</td>
-                      <td className="px-3 py-2 text-[#0f172a]">{m.name}</td>
-                      <td className="px-3 py-2 text-[#64748b]">{m.matterType}</td>
-                      <td className="px-3 py-2">
-                        <span className="inline-flex items-center gap-1.5 text-[#0f172a]">
-                          {step?.name ?? "—"}
-                          {blocked && (
-                            <span
-                              title="This step has outstanding requirements"
-                              className="inline-flex items-center gap-0.5 rounded bg-[#fef3c7] px-1.5 py-px text-[10px] font-semibold text-[#92400e]"
-                            >
-                              <TriangleAlert className="size-2.5" />
-                              blocked
-                            </span>
-                          )}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-[#64748b]">{m.assignedTo}</td>
-                      <td className="px-3 py-2 text-[#64748b]">{m.status}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-
-        <Panel title={`Outstanding tasks (${openTasks.length})`}>
-          {openTasks.map((t) => {
-            const m = state.matters.find((x) => x.id === t.matterId);
-            return (
-              <div
-                key={t.id}
-                className="flex items-center gap-2.5 border-b border-[#f1f5f9] px-3 py-2 last:border-b-0"
+        <Panel
+          title={`Matters (${filtered.length})`}
+          actions={
+            <div className="flex items-center gap-2">
+              {filterActive && (
+                <span
+                  title="A status filter is narrowing this list"
+                  className="inline-flex items-center gap-1 rounded bg-[#fef3c7] px-2 py-0.5 text-[11px] font-semibold text-[#92400e]"
+                >
+                  <Filter className="size-3" />1 filter active
+                </span>
+              )}
+              <AsSelect
+                value={filter}
+                onChange={(e) =>
+                  dispatch({
+                    type: "SET_MATTER_FILTER",
+                    status: e.target.value as MatterStatusFilter,
+                  })
+                }
               >
-                <input
-                  type="checkbox"
-                  checked={false}
-                  onChange={() => dispatch({ type: "TOGGLE_TASK", taskId: t.id })}
-                  className="size-3.5 accent-[#e2622c]"
-                />
-                <span className="min-w-0 flex-1 text-[12px]">
-                  <span className="block text-[#0f172a]">{t.name}</span>
+                {MATTER_STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {s === "All" ? "All statuses" : s}
+                  </option>
+                ))}
+              </AsSelect>
+            </div>
+          }
+        >
+          {filtered.length === 0 ? (
+            <div className="p-4 text-[12px]">
+              <p className="font-semibold text-[#0f172a]">No matters match this filter.</p>
+              <p className="mt-1 text-[#64748b]">
+                That is not the same as no matters existing — a status filter hides rows just as
+                easily as it narrows a search.{" "}
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: "SET_MATTER_FILTER", status: "All" })}
+                  className="font-semibold text-[#e2622c] hover:underline"
+                >
+                  Clear the filter
+                </button>{" "}
+                and look again before telling anyone something is missing.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] text-[12px]">
+                <thead>
+                  <tr className="border-b border-[#eef2f6] text-left text-[11px] font-semibold text-[#64748b]">
+                    <th className="px-3 py-2" aria-label="Starred" />
+                    <th className="px-3 py-2">Action ID</th>
+                    <th className="px-3 py-2">Matter name</th>
+                    <th className="px-3 py-2">Matter type</th>
+                    <th className="px-3 py-2">Current step</th>
+                    <th className="px-3 py-2">Assigned to</th>
+                    <th className="px-3 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((m) => {
+                    const step = currentStep(state, m);
+                    const blocked = !canLeaveStep(m, step);
+                    return (
+                      <tr
+                        key={m.id}
+                        className="border-b border-[#f1f5f9] last:border-b-0 hover:bg-[#f8fafc]"
+                      >
+                        <td className="px-3 py-2">
+                          <StarButton
+                            matterId={m.id}
+                            starred={state.starredMatterIds.includes(m.id)}
+                          />
+                        </td>
+                        <td
+                          onClick={() => dispatch({ type: "OPEN_MATTER", matterId: m.id })}
+                          className="cursor-pointer px-3 py-2 font-semibold text-[#e2622c]"
+                        >
+                          {m.actionId}
+                        </td>
+                        <td
+                          onClick={() => dispatch({ type: "OPEN_MATTER", matterId: m.id })}
+                          className="cursor-pointer px-3 py-2 text-[#0f172a]"
+                        >
+                          {m.name}
+                        </td>
+                        <td className="px-3 py-2 text-[#64748b]">{m.matterType}</td>
+                        <td className="px-3 py-2">
+                          <span className="inline-flex items-center gap-1.5 text-[#0f172a]">
+                            {step?.name ?? "—"}
+                            {blocked && (
+                              <span
+                                title="This step has outstanding requirements"
+                                className="inline-flex items-center gap-0.5 rounded bg-[#fef3c7] px-1.5 py-px text-[10px] font-semibold text-[#92400e]"
+                              >
+                                <TriangleAlert className="size-2.5" />
+                                blocked
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-[#64748b]">{m.assignedTo}</td>
+                        <td className="px-3 py-2 text-[#64748b]">{m.status}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The firm-wide Tasks screen — everything raised across every matter, not
+ * just the one you have open. Not part of any file itself; it just collects
+ * what every file has raised.
+ */
+export function ActionstepTasksScreen() {
+  const { state, dispatch } = useActionstep();
+  const [showCompleted, setShowCompleted] = useState(false);
+  const rows = state.tasks.filter((t) => showCompleted || !t.completedOn);
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto bg-[#f1f5f9] p-4">
+      <div className="mx-auto grid max-w-[1080px] gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-[17px] font-semibold text-[#0f172a]">Tasks</h2>
+          <label className="ml-auto flex items-center gap-1.5 text-[12px] text-[#64748b]">
+            <input
+              type="checkbox"
+              checked={showCompleted}
+              onChange={(e) => setShowCompleted(e.target.checked)}
+              className="size-3.5 accent-[#e2622c]"
+            />
+            Show completed
+          </label>
+        </div>
+
+        <Panel title={`Tasks across every matter (${rows.length})`}>
+          {rows.length === 0 ? (
+            <p className="p-3 text-[12px] text-[#64748b]">Nothing here.</p>
+          ) : (
+            rows.map((t) => {
+              const m = state.matters.find((x) => x.id === t.matterId);
+              return (
+                <div
+                  key={t.id}
+                  className="flex flex-wrap items-center gap-2.5 border-b border-[#f1f5f9] px-3 py-2.5 last:border-b-0"
+                >
+                  <input
+                    type="checkbox"
+                    checked={t.completedOn !== null}
+                    onChange={() => dispatch({ type: "TOGGLE_TASK", taskId: t.id })}
+                    className="size-3.5 accent-[#e2622c]"
+                  />
+                  <span className="min-w-0 flex-1 text-[12px]">
+                    <button
+                      type="button"
+                      onClick={() => m && dispatch({ type: "OPEN_MATTER", matterId: m.id })}
+                      className={cn(
+                        "block text-left hover:underline",
+                        t.completedOn ? "text-[#94a3b8] line-through" : "text-[#0f172a]",
+                      )}
+                    >
+                      {t.name}
+                    </button>
+                    <span className="block text-[11px] text-[#64748b]">
+                      {m?.name} · {t.assignedTo}
+                      {t.dueOn ? ` · due ${formatAuDate(t.dueOn)}` : ""}
+                    </span>
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+type FirmContact = {
+  name: string;
+  participantType: ParticipantType;
+  email: string;
+  phone: string;
+  matterNames: string[];
+};
+
+/** Every party attached to a matter, deduplicated by name — the firm-wide address book. */
+function firmContacts(state: AsState): FirmContact[] {
+  const byName = new Map<string, FirmContact>();
+  for (const m of state.matters) {
+    for (const p of m.participants) {
+      const key = p.name.toLowerCase();
+      const existing = byName.get(key);
+      if (existing) {
+        if (!existing.matterNames.includes(m.name)) existing.matterNames.push(m.name);
+      } else {
+        byName.set(key, {
+          name: p.name,
+          participantType: p.participantType,
+          email: p.email,
+          phone: p.phone,
+          matterNames: [m.name],
+        });
+      }
+    }
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * The Contacts screen — every client, other side, agent and lender, in one
+ * firm-wide list. When you attach someone to a matter as a party, this is
+ * where they come from.
+ */
+export function ActionstepContactsScreen() {
+  const { state } = useActionstep();
+  const contacts = firmContacts(state);
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto bg-[#f1f5f9] p-4">
+      <div className="mx-auto grid max-w-[1080px] gap-4">
+        <h2 className="text-[17px] font-semibold text-[#0f172a]">Contacts</h2>
+
+        <Panel title={`Every party attached to a matter (${contacts.length})`}>
+          {contacts.length === 0 ? (
+            <p className="p-3 text-[12px] text-[#64748b]">No contacts yet.</p>
+          ) : (
+            contacts.map((c) => (
+              <div
+                key={c.name}
+                className="flex flex-wrap items-center gap-3 border-b border-[#f1f5f9] px-3 py-2.5 last:border-b-0"
+              >
+                <BookUser className="size-4 shrink-0 text-[#64748b]" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12px] font-medium text-[#0f172a]">{c.name}</span>
                   <span className="block text-[11px] text-[#64748b]">
-                    {m?.name} · {t.dueOn ? `due ${formatAuDate(t.dueOn)}` : "no due date"}
+                    {c.email || "no email"} · {c.phone || "no phone"} · on{" "}
+                    {c.matterNames.length} matter{c.matterNames.length === 1 ? "" : "s"}
                   </span>
                 </span>
+                <span className="rounded bg-[#e2e8f0] px-2 py-0.5 text-[11px] font-semibold text-[#334155]">
+                  {c.participantType}
+                </span>
               </div>
-            );
-          })}
+            ))
+          )}
         </Panel>
+
+        <p className="text-[11px] text-[#64748b]">
+          This is the version every matter agrees with — when you need someone&apos;s email or
+          phone number, it comes from here rather than an old email.
+        </p>
       </div>
     </div>
   );
@@ -1006,13 +1345,13 @@ function TimeTab({ matter }: { matter: AsMatter }) {
 /* Matter shell                                                        */
 /* ------------------------------------------------------------------ */
 
-const TABS: { key: AsTab; label: string }[] = [
-  { key: "home", label: "Home" },
-  { key: "parties", label: "Parties" },
-  { key: "steps", label: "Steps" },
-  { key: "filenotes", label: "File Notes" },
-  { key: "tasks", label: "Tasks" },
-  { key: "time", label: "Time" },
+const TABS: { key: AsTab; label: string; icon: LucideIcon }[] = [
+  { key: "home", label: "Home", icon: LayoutDashboard },
+  { key: "parties", label: "Parties", icon: Users },
+  { key: "steps", label: "Steps", icon: GitBranch },
+  { key: "filenotes", label: "File Notes", icon: StickyNote },
+  { key: "tasks", label: "Tasks", icon: ListChecks },
+  { key: "time", label: "Time", icon: Clock },
 ];
 
 export function ActionstepMatterScreen() {
@@ -1020,6 +1359,9 @@ export function ActionstepMatterScreen() {
   if (!matter) return null;
   const step = currentStep(state, matter);
   const tab = state.nav.tab;
+  const starred = state.starredMatterIds.includes(matter.id);
+  const openHistory = matter.stepHistory.find((h) => h.exitedAt === null);
+  const daysHere = openHistory ? daysInStep(openHistory, state.today) : 0;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[#f1f5f9]">
@@ -1033,14 +1375,24 @@ export function ActionstepMatterScreen() {
           Matters
         </button>
         <div className="flex flex-wrap items-start gap-3">
+          <StarButton matterId={matter.id} starred={starred} className="mt-1" />
           <div className="min-w-0 flex-1">
             <div className="text-[16px] font-semibold">{matter.name}</div>
             <div className="text-[12px] text-white/65">
               Action {matter.actionId} · {matter.matterType} · assigned to {matter.assignedTo}
             </div>
           </div>
-          <span className="rounded bg-[#e2622c] px-2.5 py-1 text-[11px] font-semibold">
+          <span className="inline-flex items-center gap-1.5 rounded bg-[#e2622c] px-2.5 py-1 text-[11px] font-semibold">
             {step?.name ?? "—"}
+            {openHistory && (
+              <span
+                title="Days at this step — worth a glance, and worth mentioning if it's a lot"
+                className="inline-flex items-center gap-0.5 rounded-full bg-black/20 px-1.5 py-px"
+              >
+                <Clock className="size-2.5" />
+                {daysHere}d
+              </span>
+            )}
           </span>
         </div>
       </div>
@@ -1052,12 +1404,13 @@ export function ActionstepMatterScreen() {
             type="button"
             onClick={() => dispatch({ type: "SET_TAB", tab: t.key })}
             className={cn(
-              "shrink-0 border-b-2 px-3.5 py-2.5 text-[12px] font-semibold transition-colors",
+              "flex shrink-0 items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-[12px] font-semibold transition-colors",
               tab === t.key
                 ? "border-[#e2622c] text-[#0f172a]"
                 : "border-transparent text-[#64748b] hover:text-[#0f172a]",
             )}
           >
+            <t.icon className="size-3.5" />
             {t.label}
           </button>
         ))}

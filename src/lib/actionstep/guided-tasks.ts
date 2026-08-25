@@ -368,4 +368,53 @@ export const AS_GUIDED_TASKS: AsGuidedTask[] = [
       },
     ],
   },
+
+  {
+    id: "as-find-missing-matter",
+    title: "Find a matter that isn't there",
+    summary: "Work out why a matter you know exists doesn't show up in the list.",
+    difficulty: "Beginner",
+    minutes: 4,
+    brief:
+      "Someone asks you to check the settlement figures on the Nakamura sale — 22 Silverwater Lane, Hornsby. You go to Matters and it isn't in the list.",
+    skills: ["Matters list", "Filters", "Not trusting an empty result"],
+    steps: [
+      {
+        kind: "action",
+        instruction: "Go to the Matters screen.",
+        hint: "It's in the global bar at the top, always visible.",
+        check: (s) => logs(s, "nav.global").some((l) => l.detail.screen === "matters"),
+      },
+      {
+        kind: "action",
+        instruction: "The list defaults to Active matters only. Clear the filter so it shows everything.",
+        hint: "The filter control sits above the list, next to a badge that says a filter is active.",
+        check: (s) =>
+          logs(s, "matters.filter").some(
+            (l) => l.detail.status === "All" || l.detail.status === "Closed",
+          ),
+      },
+      {
+        kind: "action",
+        instruction: "Open the Nakamura matter now that it's visible.",
+        hint: "It's a Closed matter — that's exactly why the default filter was hiding it.",
+        check: (s) => logs(s, "nav.matter.open").some((l) => l.matterId === "am-4"),
+      },
+      {
+        kind: "answer",
+        instruction: "Check what actually happened.",
+        hint: "Nothing about the matter itself changed between not finding it and finding it.",
+        question: "Why didn't Nakamura show up the first time you looked at Matters?",
+        options: [
+          "The matter had been deleted",
+          "You don't have permission to see closed matters",
+          "A status filter was narrowing the list to Active matters, and Nakamura is Closed",
+          "The matter was never actually created",
+        ],
+        correct: 2,
+        explanation:
+          "An empty or short list is almost never an empty file — it's usually a filter left switched on. Before telling anyone a matter, task or appointment doesn't exist, check whether a filter is active and clear it first.",
+      },
+    ],
+  },
 ];

@@ -19,9 +19,13 @@ import {
   type AsMatter,
   type AsState,
   type AsTab,
+  type MatterStatusFilter,
   type MatterType,
   type ParticipantType,
 } from "./types";
+
+/** The global bar only ever points at one of these — never a matter screen. */
+export type GlobalScreen = "home" | "matters" | "tasks" | "contacts";
 
 export type NewActionDraft = {
   name: string;
@@ -36,6 +40,9 @@ export type AsAction =
   | { type: "OPEN_MATTER"; matterId: string }
   | { type: "CLOSE_MATTER" }
   | { type: "SET_TAB"; tab: AsTab }
+  | { type: "NAV_GLOBAL"; screen: GlobalScreen }
+  | { type: "TOGGLE_STAR"; matterId: string }
+  | { type: "SET_MATTER_FILTER"; status: MatterStatusFilter }
   | { type: "OPEN_CREATE_MATTER" }
   | { type: "CREATE_MATTER"; draft: NewActionDraft }
   | {
@@ -109,12 +116,37 @@ export function asReducer(state: AsState, action: AsAction): AsState {
       );
 
     case "CLOSE_MATTER":
-      return { ...state, nav: { screen: "dashboard", matterId: null, tab: "home" } };
+      return { ...state, nav: { screen: "matters", matterId: null, tab: "home" } };
 
     case "SET_TAB":
       return withLog(
         { ...state, nav: { ...state.nav, tab: action.tab } },
         logEntry("nav.tab", state.nav.matterId, { tab: action.tab }),
+      );
+
+    case "NAV_GLOBAL":
+      return withLog(
+        { ...state, nav: { screen: action.screen, matterId: null, tab: "home" } },
+        logEntry("nav.global", null, { screen: action.screen }),
+      );
+
+    case "TOGGLE_STAR": {
+      const starred = state.starredMatterIds.includes(action.matterId);
+      return withLog(
+        {
+          ...state,
+          starredMatterIds: starred
+            ? state.starredMatterIds.filter((id) => id !== action.matterId)
+            : [...state.starredMatterIds, action.matterId],
+        },
+        logEntry("matter.star", action.matterId, { starred: !starred }),
+      );
+    }
+
+    case "SET_MATTER_FILTER":
+      return withLog(
+        { ...state, matterListFilter: { status: action.status } },
+        logEntry("matters.filter", null, { status: action.status }),
       );
 
     case "OPEN_CREATE_MATTER":
