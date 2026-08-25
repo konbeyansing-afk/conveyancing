@@ -110,6 +110,7 @@ export type SimAction =
   | { type: "CLOSE_MATTER" }
   | { type: "MATTER_TAB"; tab: MatterTab }
   | { type: "OPEN_CREATE_MATTER" }
+  | { type: "OPEN_DRILLS" }
   | { type: "ADD_MEMO"; matterId: string; title: string; body: string }
   | { type: "ADD_TASK"; matterId: string | null; name: string; dueOn: string | null; category: SimTask["category"]; priority: SimTask["priority"] }
   | { type: "TOGGLE_TASK"; taskId: string }
@@ -290,6 +291,9 @@ export function simReducer(state: SimState, action: SimAction): SimState {
         { ...state, nav: { ...state.nav, screen: "create-matter" } },
         logEntry("nav.create-matter", null, {}),
       );
+
+    case "OPEN_DRILLS":
+      return { ...state, nav: { ...state.nav, screen: "drills" } };
 
     case "ADD_MEMO": {
       const memo: SimMemo = {

@@ -17,6 +17,7 @@ import {
   Settings,
   ShieldCheck,
   Square,
+  Target,
   UserRound,
   X,
   type LucideIcon,
@@ -137,6 +138,14 @@ export function FirmBar() {
         tri
       </span>
       <span className="text-[13px] font-semibold text-[#22303f]">{state.user.firm}</span>
+      <button
+        type="button"
+        onClick={() => dispatch({ type: "OPEN_DRILLS" })}
+        className="inline-flex shrink-0 items-center gap-1 text-[12px] font-semibold text-[#2f7fd0] hover:underline"
+      >
+        <Target className="size-3.5" />
+        Practice
+      </button>
       <div className="flex flex-1 justify-end">
         <div className="relative w-[420px] max-w-[45%]">
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-[#2f7fd0]" />

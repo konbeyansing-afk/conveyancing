@@ -351,7 +351,7 @@ export type MatterTab =
   | "activity"
   | "time";
 
-export type SimScreen = "home" | "matter" | "create-matter" | "lead" | "create-lead";
+export type SimScreen = "home" | "matter" | "create-matter" | "lead" | "create-lead" | "drills";
 
 export type SimNav = {
   screen: SimScreen;

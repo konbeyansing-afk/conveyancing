@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import { checkDrillField, scoreDrill, type Drill } from "@/lib/training/drill";
 import { AS_DRILLS } from "@/lib/actionstep/drills";
 import { PEXA_DRILLS } from "@/lib/pexa/drills";
+import { SIM_DRILLS } from "@/lib/simulator/drills";
 
 describe("checkDrillField — money", () => {
   it("accepts a plain number matching the canonical expected value", () => {
@@ -128,3 +129,4 @@ function describeDrillContent(name: string, drills: Drill[]) {
 
 describeDrillContent("Actionstep", AS_DRILLS);
 describeDrillContent("PEXA", PEXA_DRILLS);
+describeDrillContent("Practice system", SIM_DRILLS);

@@ -7,6 +7,7 @@ import { Maximize2, Minimize2, PanelRightOpen, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GUIDED_TASKS } from "@/lib/simulator/guided-tasks";
 import { SimulatorProvider, useSim } from "@/lib/simulator/store";
+import { DrillRunnerProvider, useDrillRunner } from "@/lib/training/drill";
 import { TaskRunnerProvider, useTaskRunner } from "@/lib/training/runner";
 import { TaskPanel } from "@/components/training/task-panel";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ import { CreateMatterScreen } from "./screens/create-matter-screen";
 import { CreateLeadScreen, LeadScreen } from "./screens/lead-screens";
 import { HomeScreen } from "./screens/home-screen";
 import { MatterScreen } from "./screens/matter-screen";
+import { DrillsScreen } from "./sim-drills";
 
 function ScreenSwitch() {
   const { state } = useSim();
@@ -26,6 +28,8 @@ function ScreenSwitch() {
       return <LeadScreen />;
     case "create-lead":
       return <CreateLeadScreen />;
+    case "drills":
+      return <DrillsScreen />;
     default:
       return <HomeScreen />;
   }
@@ -44,6 +48,7 @@ function WorkbenchToolbar({
 }) {
   const { dispatch } = useSim();
   const { stopTask } = useTaskRunner();
+  const { exit: exitDrill } = useDrillRunner();
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5">
       <span className="text-xs font-medium text-muted-foreground">
@@ -54,9 +59,10 @@ function WorkbenchToolbar({
           size="sm"
           variant="ghost"
           onClick={() => {
-            // The running scenario's ticked-off steps describe work that the
-            // reset has just discarded, so drop it too.
+            // The running scenario's ticked-off steps, and any in-progress
+            // drill, describe work that the reset has just discarded.
             stopTask();
+            exitDrill();
             dispatch({ type: "RESET" });
           }}
           title="Reset the simulator back to its starting data"
@@ -127,7 +133,9 @@ export function SimWorkbench() {
   return (
     <SimulatorProvider>
       <TaskRunnerProvider storageKey="conveyancing-academy:task:practice-system">
-        <WorkbenchInner />
+        <DrillRunnerProvider storageKey="conveyancing-academy:drill:practice-system">
+          <WorkbenchInner />
+        </DrillRunnerProvider>
       </TaskRunnerProvider>
     </SimulatorProvider>
   );
