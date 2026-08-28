@@ -2,15 +2,9 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Eye, StickyNote } from "lucide-react";
-import { addAdminNote, updateMatterStage } from "@/lib/actions/work-status";
+import { addAdminNote } from "@/lib/actions/work-status";
 import { WORK_STATUS_LABELS } from "@/lib/work-status";
-import {
-  JURISDICTION_LABELS,
-  MATTER_STAGE_LABELS,
-  MATTER_TYPE_LABELS,
-  matterWorkflow,
-  nextMatterStageLabel,
-} from "@/lib/matter-stage";
+import { MATTER_STAGE_LABELS, MATTER_TYPE_LABELS, nextMatterStageLabel } from "@/lib/matter-stage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +13,7 @@ import { PriorityBadge } from "@/components/work-status/priority-badge";
 import { MatterStageBadge } from "@/components/work-status/matter-stage-badge";
 import { JurisdictionBadge } from "@/components/work-status/jurisdiction-badge";
 import { ConveyancingTimeline } from "@/components/work-status/conveyancing-timeline";
+import { MatterStageEditor } from "@/components/work-status/matter-stage-editor";
 import {
   Sheet,
   SheetContent,
@@ -64,57 +59,6 @@ export type WorkItemDetail = {
   }[];
   adminNotes: { id: string; note: string; createdAt: Date; adminUser: { name: string } }[];
 };
-
-/**
- * Matter Stage is the one field on a WorkItem the VA cannot edit — only an
- * Admin or an authorized Trainer moves a matter through its conveyancing
- * lifecycle. Options are scoped to the matter's own jurisdiction workflow,
- * so an NSW matter is never offered a QLD-only stage.
- */
-function MatterStageEditor({ item }: { item: WorkItemDetail }) {
-  const action = updateMatterStage.bind(null, item.id);
-  const [stage, setStage] = useState<MatterStage>(item.matterStage);
-  const [state, formAction, pending] = useActionState(action, null);
-  const stages = matterWorkflow(item.jurisdiction);
-
-  return (
-    <form action={formAction} className="grid gap-2 rounded-lg border p-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="grid min-w-0 flex-1 gap-1">
-          <label htmlFor={`matterStage-${item.id}`} className="text-xs font-medium text-muted-foreground">
-            Matter Stage ({JURISDICTION_LABELS[item.jurisdiction]} workflow)
-          </label>
-          <select
-            id={`matterStage-${item.id}`}
-            name="newStage"
-            value={stage}
-            onChange={(e) => setStage(e.target.value as MatterStage)}
-            className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm"
-          >
-            {stages.map((s) => (
-              <option key={s} value={s}>
-                {MATTER_STAGE_LABELS[s]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Button type="submit" size="sm" disabled={pending || stage === item.matterStage}>
-          {pending ? "Saving…" : "Update Stage"}
-        </Button>
-      </div>
-      {state?.error && (
-        <p role="alert" className="text-xs text-destructive">
-          {state.error}
-        </p>
-      )}
-      {state?.success && (
-        <p role="status" className="text-xs text-success">
-          {state.success}
-        </p>
-      )}
-    </form>
-  );
-}
 
 function AddAdminNoteForm({ workItemId }: { workItemId: string }) {
   const action = addAdminNote.bind(null, workItemId);

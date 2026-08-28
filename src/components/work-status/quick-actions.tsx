@@ -79,11 +79,6 @@ export function QuickStatusButton({
           {state.error}
         </p>
       )}
-      {state?.conflict && (
-        <p className="text-xs text-warning">
-          You already have &ldquo;{state.conflict.title}&rdquo; marked In Progress. Finish or pause it first.
-        </p>
-      )}
     </div>
   );
 }
@@ -165,11 +160,8 @@ export function AddNoteDialog({ workItemId }: { workItemId: string }) {
 }
 
 /**
- * Moves a task back to IN_PROGRESS with an optional reason — covers both
- * "Resolve Blocker" and reopening a Completed task (spec section 26). If the
- * VA already has another active task, this surfaces that plainly rather than
- * the full start-a-new-task resolution flow (this is a secondary path, not
- * the primary "start something new" one).
+ * Moves a matter back to IN_PROGRESS with an optional reason — covers both
+ * "Resolve Blocker" and reopening a Completed matter (spec section 26).
  */
 export function ResumeWorkDialog({
   workItemId,
@@ -200,12 +192,6 @@ export function ResumeWorkDialog({
             <Label htmlFor="note">Reason</Label>
             <Textarea id="note" name="note" rows={2} placeholder={notePlaceholder} />
           </div>
-          {state?.conflict && (
-            <p className="text-sm text-warning">
-              You already have &ldquo;{state.conflict.title}&rdquo; marked In Progress. Finish or pause it
-              first.
-            </p>
-          )}
           <Feedback state={state} />
           <DialogFooter>
             <DialogClose render={<Button variant="outline" type="button" />}>

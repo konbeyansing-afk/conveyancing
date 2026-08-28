@@ -13,6 +13,7 @@ import {
   isSameAppDay,
   isValidStatusTransition,
   needsBlockedReason,
+  pickCurrentItems,
   pickRepresentativeItem,
   summarizeStatuses,
 } from "@/lib/work-status";
@@ -186,5 +187,33 @@ describe("pickRepresentativeItem", () => {
     ];
     expect(pickRepresentativeItem(items)?.id).toBe("new-queued");
     expect(pickRepresentativeItem([{ ...base, status: "COMPLETED" as const, id: "done" }])).toBeNull();
+  });
+});
+
+describe("pickCurrentItems — a VA can have several matters open at once", () => {
+  const base = { updatedAt: new Date("2026-03-04T00:00:00.000Z") };
+  const older = { updatedAt: new Date("2026-03-01T00:00:00.000Z") };
+
+  it("returns every in-progress matter, not just one", () => {
+    const items = [
+      { ...older, status: "IN_PROGRESS" as const, id: "matter-a" },
+      { ...base, status: "IN_PROGRESS" as const, id: "matter-b" },
+      { ...base, status: "COMPLETED" as const, id: "done" },
+    ];
+    expect(pickCurrentItems(items).map((i) => i.id)).toEqual(["matter-b", "matter-a"]);
+  });
+
+  it("falls back to every blocked matter when nothing is in progress", () => {
+    const items = [
+      { ...older, status: "BLOCKED" as const, id: "blocker-a" },
+      { ...base, status: "BLOCKED" as const, id: "blocker-b" },
+      { ...base, status: "NOT_STARTED" as const, id: "queued" },
+    ];
+    expect(pickCurrentItems(items).map((i) => i.id)).toEqual(["blocker-b", "blocker-a"]);
+  });
+
+  it("does not surface a merely queued item — that belongs in Pending, not here", () => {
+    const items = [{ ...base, status: "NOT_STARTED" as const, id: "queued" }];
+    expect(pickCurrentItems(items)).toEqual([]);
   });
 });

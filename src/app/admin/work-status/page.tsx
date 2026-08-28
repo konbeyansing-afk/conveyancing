@@ -12,6 +12,8 @@ import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { VaStatusTable, type VaSummary } from "@/components/admin/work-status/va-status-table";
 import { formatRelativeTime } from "@/lib/format-relative-time";
+import { hasChecklistTemplate } from "@/lib/checklist-templates";
+import { loadChecklist } from "@/lib/checklist-data";
 
 export default async function AdminWorkStatusPage() {
   const [vas, items] = await Promise.all([
@@ -30,6 +32,7 @@ export default async function AdminWorkStatusPage() {
         matterReference: true,
         notes: true,
         jurisdiction: true,
+        matterType: true,
         matterStage: true,
         status: true,
         priority: true,
@@ -51,39 +54,62 @@ export default async function AdminWorkStatusPage() {
   let blocked = 0;
   let updatedTodayCount = 0;
 
-  const summaries: VaSummary[] = vas.map((va) => {
-    const vaItems = itemsByVa.get(va.id) ?? [];
-    const state = classifyVaState(vaItems);
-    if (state === "working") working++;
-    if (state === "pending") pending++;
-    if (state === "blocked") blocked++;
+  const summaries: VaSummary[] = await Promise.all(
+    vas.map(async (va) => {
+      const vaItems = itemsByVa.get(va.id) ?? [];
+      const state = classifyVaState(vaItems);
+      if (state === "working") working++;
+      if (state === "pending") pending++;
+      if (state === "blocked") blocked++;
 
-    const representative = pickRepresentativeItem(vaItems);
-    const lastUpdated = vaItems.reduce<Date | null>(
-      (latest, i) => (!latest || i.updatedAt > latest ? i.updatedAt : latest),
-      null,
-    );
-    if (lastUpdated && isSameAppDay(lastUpdated, now)) updatedTodayCount++;
+      const representative = pickRepresentativeItem(vaItems);
+      const lastUpdated = vaItems.reduce<Date | null>(
+        (latest, i) => (!latest || i.updatedAt > latest ? i.updatedAt : latest),
+        null,
+      );
+      if (lastUpdated && isSameAppDay(lastUpdated, now)) updatedTodayCount++;
 
-    const completedToday = vaItems.filter(
-      (i) => i.status === "COMPLETED" && i.completedAt && isSameAppDay(i.completedAt, now),
-    ).length;
+      const completedToday = vaItems.filter(
+        (i) => i.status === "COMPLETED" && i.completedAt && isSameAppDay(i.completedAt, now),
+      ).length;
 
-    return {
-      id: va.id,
-      name: va.name,
-      email: va.email,
-      currentTask: representative?.title ?? null,
-      currentMatter: representative?.matterReference ?? null,
-      jurisdiction: representative?.jurisdiction ?? null,
-      matterStage: representative?.matterStage ?? null,
-      status: representative?.status ?? null,
-      priority: representative?.priority ?? null,
-      lastUpdated: lastUpdated ? lastUpdated.toISOString() : null,
-      completedToday,
-      searchText: vaItems.map((i) => `${i.title} ${i.matterReference ?? ""} ${i.notes ?? ""}`).join(" "),
-    };
-  });
+      // Checklist Progress (spec section 12): computed live from the
+      // representative matter's actual task records, not a stored/faked
+      // number — null when there's no matter, or no checklist template for
+      // its jurisdiction/matter type yet (e.g. NSW before it shipped).
+      let checklistProgress: number | null = null;
+      let blockedTaskCount = 0;
+      if (representative && hasChecklistTemplate(representative.jurisdiction, representative.matterType)) {
+        const checklist = await loadChecklist(
+          representative.id,
+          representative.jurisdiction,
+          representative.matterType,
+          representative.matterStage,
+        );
+        const total = checklist.tasks.length;
+        const done = checklist.tasks.filter((t) => t.status === "COMPLETED" || t.status === "NOT_APPLICABLE").length;
+        checklistProgress = total === 0 ? null : Math.round((done / total) * 100);
+        blockedTaskCount = checklist.tasks.filter((t) => t.status === "BLOCKED").length;
+      }
+
+      return {
+        id: va.id,
+        name: va.name,
+        email: va.email,
+        currentTask: representative?.title ?? null,
+        currentMatter: representative?.matterReference ?? null,
+        jurisdiction: representative?.jurisdiction ?? null,
+        matterStage: representative?.matterStage ?? null,
+        status: representative?.status ?? null,
+        priority: representative?.priority ?? null,
+        lastUpdated: lastUpdated ? lastUpdated.toISOString() : null,
+        completedToday,
+        checklistProgress,
+        blockedTaskCount,
+        searchText: vaItems.map((i) => `${i.title} ${i.matterReference ?? ""} ${i.notes ?? ""}`).join(" "),
+      };
+    }),
+  );
 
   const completedTodayTotal = items.filter(
     (i) => i.status === "COMPLETED" && i.completedAt && isSameAppDay(i.completedAt, now),

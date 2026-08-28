@@ -4,16 +4,19 @@
  * Work Status server actions.
  *
  * Permission boundary: a VA fully owns their own work — create, edit, change
- * status, add notes, and (per spec) the matter's identity fields including
- * Jurisdiction and Matter Type — and can never touch another VA's. Matter
- * Stage is different: only an Admin or Trainer moves a matter through its
- * conveyancing lifecycle (a supervisory/oversight action), never the VA
- * themselves — see updateMatterStage. An Admin can also observe everything,
- * add Admin Notes, and soft-delete a work item (audited), but cannot edit a
- * VA's status or identity fields directly. Every action re-checks ownership
- * server-side; the UI hiding a button is never the only protection. The
- * authenticated actor's id is always used for userId/authorship — never a
- * client-supplied one.
+ * status, add notes, the matter's identity fields (Jurisdiction, Matter
+ * Type), and its Matter Stage — and can never touch another VA's. Admin and
+ * any Trainer can also move a matter's stage on any VA's work, as
+ * oversight — see updateMatterStage. An Admin can additionally observe
+ * everything, add Admin Notes, and soft-delete a work item (audited), but
+ * cannot edit a VA's status or identity fields directly. Every action
+ * re-checks ownership server-side; the UI hiding a button is never the only
+ * protection. The authenticated actor's id is always used for
+ * userId/authorship — never a client-supplied one.
+ *
+ * A VA may have several matters open (IN_PROGRESS) at the same time — there
+ * is no one-active-task limit here. Each matter is independent: starting or
+ * updating one never touches another.
  */
 
 import { revalidatePath } from "next/cache";
@@ -23,7 +26,6 @@ import {
   WORK_PRIORITY_VALUES,
   WORK_STATUS_LABELS,
   WORK_STATUS_VALUES,
-  isActiveStatus,
   isValidStatusTransition,
   needsBlockedReason,
 } from "@/lib/work-status";
@@ -35,12 +37,13 @@ import {
   isStageValidForJurisdiction,
   isValidMatterStage,
 } from "@/lib/matter-stage";
+import { checklistTemplate } from "@/lib/checklist-templates";
+import { mergeChecklistTasks, stageGateResult } from "@/lib/checklist";
 import type { Jurisdiction, MatterStage, MatterType, WorkPriority, WorkStatus } from "@prisma/client";
 
 export type WorkActionState =
-  | { error: string; success?: undefined; conflict?: undefined }
-  | { success: string; error?: undefined; conflict?: undefined }
-  | { conflict: { id: string; title: string }; error?: undefined; success?: undefined }
+  | { error: string; success?: undefined }
+  | { success: string; error?: undefined }
   | null;
 
 function parseCommonFields(formData: FormData) {
@@ -79,19 +82,6 @@ function validateCommonFields(fields: ReturnType<typeof parseCommonFields>): str
   return null;
 }
 
-/** Finds the VA's other IN_PROGRESS item, if any, excluding `excludeId`. */
-async function findActiveConflict(userId: string, excludeId?: string) {
-  return prisma.workItem.findFirst({
-    where: {
-      userId,
-      status: "IN_PROGRESS",
-      deletedAt: null,
-      ...(excludeId ? { id: { not: excludeId } } : {}),
-    },
-    select: { id: true, title: true },
-  });
-}
-
 /* ------------------------------------------------------------------ */
 /* VA — create, edit, notes                                            */
 /* ------------------------------------------------------------------ */
@@ -105,13 +95,6 @@ export async function createWorkItem(
   const fields = parseCommonFields(formData);
   const validationError = validateCommonFields(fields);
   if (validationError) return { error: validationError };
-
-  const confirmResolution = formData.get("confirmResolution") === "true";
-
-  if (isActiveStatus(fields.status)) {
-    const existing = await findActiveConflict(actor.id);
-    if (existing && !confirmResolution) return { conflict: existing };
-  }
 
   const now = new Date();
   const item = await prisma.workItem.create({
@@ -170,12 +153,6 @@ export async function updateWorkItem(
   }
 
   const statusChanged = fields.status !== item.status;
-  const confirmResolution = formData.get("confirmResolution") === "true";
-
-  if (statusChanged && isActiveStatus(fields.status)) {
-    const existing = await findActiveConflict(actor.id, workItemId);
-    if (existing && !confirmResolution) return { conflict: existing };
-  }
 
   // Jurisdiction determines which matter-stage workflow applies (spec: "A
   // NSW matter should not accidentally receive a QLD-only workflow
@@ -243,52 +220,9 @@ export async function updateWorkItem(
 }
 
 /**
- * Resolves the one-active-task conflict (spec section 16) and completes the
- * create/edit in a single round trip: the two "Mark it Completed" / "Mark it
- * Pending" buttons shown alongside the conflict warning are submit buttons
- * inside the *same* form, each pointing here via its own `formAction` — so
- * the in-progress title/matter/etc the VA already typed travels with the
- * resolution instead of depending on a second, separately-triggered
- * re-submit. (An earlier version re-submitted the create form via a ref
- * after a sibling action's `revalidatePath` refresh; that refresh could
- * remount the dialog and detach the ref before the re-submit fired.)
- */
-export async function resolveConflictAndSubmit(
-  conflictItemId: string,
-  resolutionStatus: "COMPLETED" | "WAITING_PENDING",
-  targetWorkItemId: string | null,
-  _prevState: WorkActionState,
-  formData: FormData,
-): Promise<WorkActionState> {
-  const actor = await requireRole("VA");
-
-  const conflictItem = await prisma.workItem.findUnique({ where: { id: conflictItemId } });
-  if (conflictItem && !conflictItem.deletedAt && conflictItem.userId === actor.id && conflictItem.status === "IN_PROGRESS") {
-    await prisma.workItem.update({
-      where: { id: conflictItemId },
-      data: { status: resolutionStatus, completedAt: resolutionStatus === "COMPLETED" ? new Date() : null },
-    });
-    await prisma.workActivity.create({
-      data: {
-        workItemId: conflictItemId,
-        userId: actor.id,
-        previousStatus: "IN_PROGRESS",
-        newStatus: resolutionStatus,
-        note: null,
-      },
-    });
-  }
-
-  formData.set("confirmResolution", "true");
-  return targetWorkItemId ? updateWorkItem(targetWorkItemId, null, formData) : createWorkItem(null, formData);
-}
-
-/**
  * The quick-action status changes (Mark Completed / Mark Pending / Mark
- * Blocked / Resolve Blocker / Reopen) and the two conflict-resolution buttons
- * shown when a VA tries to start a second active task all funnel through
- * here — they are all "change this item's status, log it" with an optional
- * note.
+ * Blocked / Resolve Blocker / Reopen) all funnel through here — they are all
+ * "change this item's status, log it" with an optional note.
  */
 export async function setWorkItemStatus(
   workItemId: string,
@@ -312,15 +246,9 @@ export async function setWorkItemStatus(
   const note = ((formData.get("note") as string) ?? "").trim() || null;
   const blockedReason = ((formData.get("blockedReason") as string) ?? "").trim() || null;
   const blockedNeeds = ((formData.get("blockedNeeds") as string) ?? "").trim() || null;
-  const confirmResolution = formData.get("confirmResolution") === "true";
 
   if (needsBlockedReason(newStatus) && !blockedReason) {
     return { error: "Blocked work needs a reason." };
-  }
-
-  if (isActiveStatus(newStatus)) {
-    const existing = await findActiveConflict(actor.id, workItemId);
-    if (existing && !confirmResolution) return { conflict: existing };
   }
 
   const now = new Date();
@@ -373,18 +301,21 @@ export async function addWorkNote(
 }
 
 /* ------------------------------------------------------------------ */
-/* Admin/Trainer — moving a matter through its conveyancing lifecycle   */
+/* Matter Stage — the VA on their own matter, or Admin/Trainer on any   */
 /* ------------------------------------------------------------------ */
 
 /**
- * Moves a matter to a new stage in its conveyancing lifecycle. Deliberately
- * not part of the VA's own update/status actions above: Matter Stage
- * answers "where is the transaction?", a supervisory judgement, distinct
- * from Work Status ("what is the VA's work doing?"), which the VA alone
- * controls. Any Trainer is treated as authorized today — there is no
- * existing per-trainer VA-assignment scope to check against (the
- * TrainerAssignment model only links trainers to Trainees, a different
- * role), unlike the narrower scoping trainers get elsewhere in the app.
+ * Moves a matter to a new stage in its conveyancing lifecycle. Kept as its
+ * own action, separate from the VA's Work Status update above: Matter
+ * Stage answers "where is the transaction?" while Work Status answers
+ * "what is the VA's work doing right now?" — two different questions that
+ * happen to now share who's allowed to answer them. A VA moves their own
+ * matter along (they're the one actually doing the work); Admin and any
+ * Trainer can move any VA's matter too, as oversight. Any Trainer is
+ * treated as authorized today — there is no existing per-trainer
+ * VA-assignment scope to check against (the TrainerAssignment model only
+ * links trainers to Trainees, a different role), unlike the narrower
+ * scoping trainers get elsewhere in the app.
  *
  * `newStage` travels in `formData` (name="newStage") rather than as a bound
  * argument: it is chosen dynamically from a single shared <select>, unlike
@@ -396,10 +327,13 @@ export async function updateMatterStage(
   _prevState: WorkActionState,
   formData: FormData,
 ): Promise<WorkActionState> {
-  const actor = await requireRole("ADMIN", "TRAINER");
+  const actor = await requireRole("ADMIN", "TRAINER", "VA");
 
   const item = await prisma.workItem.findUnique({ where: { id: workItemId } });
   if (!item || item.deletedAt) return { error: "That work item no longer exists." };
+  if (actor.role === "VA" && item.userId !== actor.id) {
+    return { error: "You can only move your own matter's stage." };
+  }
 
   const newStage = formData.get("newStage") as MatterStage;
   if (!isValidMatterStage(newStage)) return { error: "Invalid matter stage." };
@@ -409,6 +343,23 @@ export async function updateMatterStage(
   }
 
   if (newStage === item.matterStage) return { success: "Matter stage updated." };
+
+  // Stage gating (spec section 8): a matter with a checklist template
+  // cannot skip past a stage that still has incomplete required tasks.
+  // Moving backward, or a matter with no template at all (no matterType
+  // set, or a jurisdiction/matterType with no template yet), is
+  // unrestricted — this only ever adds a check on top of the existing
+  // free-form move, never removes the ability to correct a mistake.
+  if (checklistTemplate(item.jurisdiction, item.matterType).length > 0) {
+    const rows = await prisma.checklistTask.findMany({ where: { workItemId } });
+    const views = mergeChecklistTasks(item.jurisdiction, item.matterType, rows);
+    const gate = stageGateResult(item.jurisdiction, views, item.matterStage, newStage);
+    if (!gate.allowed) {
+      return {
+        error: `Complete the required tasks in ${MATTER_STAGE_LABELS[gate.blockingStage]} before moving to ${MATTER_STAGE_LABELS[newStage]}.`,
+      };
+    }
+  }
 
   const note = ((formData.get("note") as string) ?? "").trim() || null;
 

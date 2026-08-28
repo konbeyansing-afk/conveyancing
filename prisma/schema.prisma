@@ -66,12 +66,29 @@ enum MatterStage {
   SEARCHES
   PRE_SETTLEMENT
   SETTLEMENT_PREPARATION // NSW
+  PEXA
   SETTLEMENT_BOOKED
   SETTLEMENT
   POST_SETTLEMENT
   LODGEMENT_REGISTRATION // NSW
   MATTER_FINALISATION
   COMPLETED
+}
+
+/**
+ * The status of one checklist task on one matter — deliberately the same
+ * six values as Work Status plus NOT_APPLICABLE (a task a particular matter
+ * genuinely does not need, e.g. a Strata task on a non-strata property),
+ * kept as its own enum rather than reusing WorkStatus because "not
+ * applicable" has no meaning for a WorkItem's own status.
+ */
+enum ChecklistTaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  WAITING_PENDING
+  BLOCKED
+  COMPLETED
+  NOT_APPLICABLE
 }
 
 enum QuestionType {
@@ -115,6 +132,8 @@ model User {
   workItemsDeleted       WorkItem[]          @relation("WorkItemDeletedBy")
   workActivity           WorkActivity[]
   workAdminNotes         WorkAdminNote[]
+  checklistTasksAssigned ChecklistTask[]     @relation("ChecklistTaskAssignee")
+  checklistTasksCompleted ChecklistTask[]    @relation("ChecklistTaskCompletedBy")
 }
 
 /**
@@ -157,6 +176,7 @@ model WorkItem {
   updatedAt           DateTime        @updatedAt
   activity            WorkActivity[]
   adminNotes          WorkAdminNote[]
+  checklistTasks      ChecklistTask[]
 
   @@index([userId, status])
   @@index([userId, deletedAt])
@@ -207,6 +227,39 @@ model WorkAdminNote {
   updatedAt   DateTime @updatedAt
 
   @@index([workItemId, createdAt])
+}
+
+/**
+ * One instantiated checklist item on one matter, generated from the
+ * Jurisdiction+MatterType template in src/lib/checklist-templates.ts when
+ * the matter's checklist is first opened (see ensureChecklistForWorkItem).
+ * `taskKey` ties a row back to its template definition — the source of its
+ * section/stage/title/required/dependsOn, none of which are duplicated
+ * here, so a template wording fix applies to every matter without a
+ * migration. Rows are never regenerated once created (a VA's notes/status
+ * on a task must survive a later template tweak), only added if the
+ * template gains a new key the matter doesn't have yet.
+ */
+model ChecklistTask {
+  id            String              @id @default(cuid())
+  workItemId    String
+  workItem      WorkItem            @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  taskKey       String
+  status        ChecklistTaskStatus @default(NOT_STARTED)
+  notes         String?
+  blockedReason String?
+  dueDate       DateTime?
+  priority      WorkPriority?
+  assignedToId  String?
+  assignedTo    User?               @relation("ChecklistTaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  completedAt   DateTime?
+  completedById String?
+  completedBy   User?               @relation("ChecklistTaskCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([workItemId, taskKey])
+  @@index([workItemId, status])
 }
 
 model Program {

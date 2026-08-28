@@ -24,14 +24,22 @@ const TABS: { value: FilterTab; label: string; statuses: WorkStatus[] }[] = [
 ];
 
 /**
- * `isFeatured` items already have their quick actions in the Currently
- * Working On card above (spec section 3) — this row skips duplicating them
- * and only offers View. Every other row gets a status-appropriate action so
- * a VA is never stuck with a blocker or a queued task they can only look at
- * (spec section 17): Blocked gets Resolve Blocker, Not Started/Waiting gets
- * Start, Completed gets View only.
+ * `isFeatured` items — every matter already shown as its own card in
+ * Currently Working On above — skip duplicating those quick actions here and
+ * only offer View. Every other row gets a status-appropriate action so a VA
+ * is never stuck with a blocker or a queued task they can only look at (spec
+ * section 17): Blocked gets Resolve Blocker, Not Started/Waiting gets Start,
+ * Completed gets View only.
  */
-function WorkItemRow({ item, isFeatured }: { item: WorkItemDetail; isFeatured: boolean }) {
+function WorkItemRow({
+  item,
+  isFeatured,
+  canEditMatterStage,
+}: {
+  item: WorkItemDetail;
+  isFeatured: boolean;
+  canEditMatterStage: boolean;
+}) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
       <div className="min-w-0">
@@ -64,7 +72,7 @@ function WorkItemRow({ item, isFeatured }: { item: WorkItemDetail; isFeatured: b
             icon={<Play className="size-3.5" />}
           />
         )}
-        <WorkItemDetailSheet item={item} />
+        <WorkItemDetailSheet item={item} canEditMatterStage={canEditMatterStage} />
       </div>
     </div>
   );
@@ -76,7 +84,15 @@ function WorkItemRow({ item, isFeatured }: { item: WorkItemDetail; isFeatured: b
  * Stage and Priority as combinable filters on top — "QLD + Pre-Settlement",
  * "NSW + Blocked", etc. Sorting is always by most recently updated.
  */
-export function MyWorkTabs({ items, featuredId }: { items: WorkItemDetail[]; featuredId?: string }) {
+export function MyWorkTabs({
+  items,
+  featuredIds,
+  canEditMatterStage = false,
+}: {
+  items: WorkItemDetail[];
+  featuredIds?: Set<string>;
+  canEditMatterStage?: boolean;
+}) {
   const [tab, setTab] = useState<FilterTab>("in-progress");
   const [jurisdictionFilter, setJurisdictionFilter] = useState<Jurisdiction | "ALL">("ALL");
   const [stageFilter, setStageFilter] = useState<MatterStage | "ALL">("ALL");
@@ -187,7 +203,12 @@ export function MyWorkTabs({ items, featuredId }: { items: WorkItemDetail[]; fea
       ) : (
         <div className="grid gap-2">
           {visible.map((item) => (
-            <WorkItemRow key={item.id} item={item} isFeatured={item.id === featuredId} />
+            <WorkItemRow
+              key={item.id}
+              item={item}
+              isFeatured={featuredIds?.has(item.id) ?? false}
+              canEditMatterStage={canEditMatterStage}
+            />
           ))}
         </div>
       )}

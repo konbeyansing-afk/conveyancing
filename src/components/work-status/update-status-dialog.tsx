@@ -2,12 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { PlusCircle } from "lucide-react";
-import {
-  createWorkItem,
-  resolveConflictAndSubmit,
-  updateWorkItem,
-  type WorkActionState,
-} from "@/lib/actions/work-status";
+import { createWorkItem, updateWorkItem, type WorkActionState } from "@/lib/actions/work-status";
 import {
   WORK_PRIORITY_LABELS,
   WORK_PRIORITY_VALUES,
@@ -76,26 +71,20 @@ function Feedback({ state }: { state: WorkActionState }) {
   return null;
 }
 
-/** A no-op placeholder so the resolution hooks below can always be called (rules of hooks) even before there is a conflict to resolve. */
-async function noConflictAction(): Promise<WorkActionState> {
-  return null;
-}
-
 /**
- * The "+ Update Work Status" form — used both to start a new task and, when
- * `item` is supplied, to edit an existing one (the current task card's
- * "Update" quick action). Same fields either way. Uncontrolled/no
- * auto-close on success, matching the rest of the app's action dialogs — a
- * success message is shown in place and the VA dismisses manually.
+ * The "+ Update Work Status" form — used both to start a new matter and,
+ * when `item` is supplied, to edit an existing one (a matter card's
+ * "Update" quick action). Same fields either way; a VA can have several
+ * matters open at once, so starting a new one never touches any other.
+ * Uncontrolled/no auto-close on success, matching the rest of the app's
+ * action dialogs — a success message is shown in place and the VA
+ * dismisses manually.
  *
  * Every field is React-controlled rather than left as an uncontrolled
- * `defaultValue` input. That is deliberate: when the one-active-task
- * conflict banner (below) appears, it renders inside this same form, and in
- * practice that additional render pass was observed to detach the browser's
- * native input state for uncontrolled fields — the typed title/matter/etc
- * would be visibly wiped back to empty, taking the retry down with it. A
- * controlled field can't lose its value that way: React re-supplies it from
- * state on every render no matter what the DOM does underneath.
+ * `defaultValue` input, matching the DOM-resync pattern used for the
+ * `<select>`s below: `<form action={...}>` runs a native form reset after
+ * every submission, and React does not always notice an uncontrolled
+ * `<select>`'s value now disagrees with state after that reset.
  */
 export function UpdateWorkStatusDialog({
   item,
@@ -155,31 +144,6 @@ export function UpdateWorkStatusDialog({
     }
   });
 
-  /**
-   * The one-active-task conflict (spec section 16): "Would you like to mark
-   * it as completed, pending, or pause it before starting this task?" Both
-   * resolution buttons below live *inside* the same form as the fields
-   * above and submit via their own `formAction`, so the title/matter/etc the
-   * VA already typed travels along with the resolution in one round trip —
-   * resolveConflictAndSubmit resolves the old task, then creates/updates
-   * this one. Each is its own useActionState so pending/errors track
-   * separately from the form's default submit; `effectiveState` picks
-   * whichever one actually ran for rendering feedback and for the conflict
-   * banner itself, so a successful resolution replaces the stale conflict.
-   */
-  const conflictId = state?.conflict?.id;
-  const [completeResult, resolveCompleteAction, completePending] = useActionState(
-    conflictId ? resolveConflictAndSubmit.bind(null, conflictId, "COMPLETED", item?.id ?? null) : noConflictAction,
-    null,
-  );
-  const [pendingResult, resolvePendingAction, resolvePendingPending] = useActionState(
-    conflictId
-      ? resolveConflictAndSubmit.bind(null, conflictId, "WAITING_PENDING", item?.id ?? null)
-      : noConflictAction,
-    null,
-  );
-  const effectiveState = completeResult ?? pendingResult ?? state;
-
   return (
     <Dialog>
       <DialogTrigger render={<Button className={triggerClassName} />}>
@@ -199,35 +163,6 @@ export function UpdateWorkStatusDialog({
         </DialogHeader>
 
         <form action={formAction} className="grid gap-3">
-          {effectiveState?.conflict && (
-            <div className="grid gap-3 rounded-lg border border-warning/30 bg-warning/5 p-3">
-              <p className="text-sm">
-                You currently have another task marked <strong>In Progress</strong> (&ldquo;
-                {effectiveState.conflict.title}&rdquo;). Mark it completed or pending before starting this one.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="submit"
-                  formAction={resolveCompleteAction}
-                  size="sm"
-                  variant="outline"
-                  disabled={completePending || resolvePendingPending}
-                >
-                  {completePending ? "Saving…" : "Mark it Completed"}
-                </Button>
-                <Button
-                  type="submit"
-                  formAction={resolvePendingAction}
-                  size="sm"
-                  variant="outline"
-                  disabled={completePending || resolvePendingPending}
-                >
-                  {resolvePendingPending ? "Saving…" : "Mark it Pending"}
-                </Button>
-              </div>
-            </div>
-          )}
-
           <div className="grid gap-1.5">
             <Label htmlFor="title">What are you working on?</Label>
             <Input
@@ -389,11 +324,11 @@ export function UpdateWorkStatusDialog({
             />
           </div>
 
-          <Feedback state={effectiveState?.conflict ? null : effectiveState} />
+          <Feedback state={state} />
 
           <DialogFooter>
             <DialogClose render={<Button variant="outline" type="button" />}>
-              {effectiveState?.success ? "Done" : "Cancel"}
+              {state?.success ? "Done" : "Cancel"}
             </DialogClose>
             <Button type="submit" disabled={pending}>
               {pending ? "Saving…" : "Update"}

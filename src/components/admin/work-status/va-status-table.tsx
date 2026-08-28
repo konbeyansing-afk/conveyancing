@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge } from "@/components/work-status/status-badge";
 import { PriorityBadge } from "@/components/work-status/priority-badge";
@@ -33,8 +34,36 @@ export type VaSummary = {
   priority: WorkPriority | null;
   lastUpdated: string | null;
   completedToday: number;
+  /** Checklist completion for the representative matter, 0-100, or null when no checklist template applies. */
+  checklistProgress: number | null;
+  blockedTaskCount: number;
   /** Titles/matter refs/notes across this VA's work items, for search. */
   searchText: string;
+};
+
+type HealthStatus = "ON_TRACK" | "AT_RISK" | "BLOCKED" | "COMPLETED";
+
+/**
+ * On Track / At Risk / Blocked / Completed (spec section 11) — derived
+ * live from the VA's current work status and checklist, never a stored
+ * field: Blocked wins outright (the work itself is stuck), Completed means
+ * the representative matter's checklist is fully done, At Risk means
+ * something on the checklist is Blocked even though the matter's overall
+ * status isn't, and On Track is everything else with an active matter.
+ */
+function healthStatus(va: VaSummary): HealthStatus | null {
+  if (!va.status) return null;
+  if (va.status === "BLOCKED") return "BLOCKED";
+  if (va.status === "COMPLETED" || va.checklistProgress === 100) return "COMPLETED";
+  if (va.blockedTaskCount > 0) return "AT_RISK";
+  return "ON_TRACK";
+}
+
+const HEALTH_LABELS: Record<HealthStatus, string> = {
+  ON_TRACK: "On Track",
+  AT_RISK: "At Risk",
+  BLOCKED: "Blocked",
+  COMPLETED: "Completed",
 };
 
 function initials(name: string) {
@@ -54,6 +83,7 @@ export function VaStatusTable({ vas }: { vas: VaSummary[] }) {
   const [jurisdictionFilter, setJurisdictionFilter] = useState<Jurisdiction | "all">("all");
   const [stageFilter, setStageFilter] = useState<MatterStage | "all">("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [healthFilter, setHealthFilter] = useState<HealthStatus | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customStart, setCustomStart] = useState("");
@@ -79,6 +109,7 @@ export function VaStatusTable({ vas }: { vas: VaSummary[] }) {
       if (jurisdictionFilter !== "all" && va.jurisdiction !== jurisdictionFilter) return false;
       if (stageFilter !== "all" && va.matterStage !== stageFilter) return false;
       if (statusFilter !== "all" && va.status !== statusFilter) return false;
+      if (healthFilter !== "all" && healthStatus(va) !== healthFilter) return false;
       if (priorityFilter !== "all" && va.priority !== priorityFilter) return false;
 
       if (dateFilter !== "all") {
@@ -106,6 +137,7 @@ export function VaStatusTable({ vas }: { vas: VaSummary[] }) {
     jurisdictionFilter,
     stageFilter,
     statusFilter,
+    healthFilter,
     priorityFilter,
     dateFilter,
     customStart,
@@ -177,6 +209,18 @@ export function VaStatusTable({ vas }: { vas: VaSummary[] }) {
           ))}
         </select>
         <select
+          value={healthFilter}
+          onChange={(e) => setHealthFilter(e.target.value as HealthStatus | "all")}
+          className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm"
+        >
+          <option value="all">All (On Track / At Risk / Blocked / Completed)</option>
+          {(Object.keys(HEALTH_LABELS) as HealthStatus[]).map((h) => (
+            <option key={h} value={h}>
+              {HEALTH_LABELS[h]}
+            </option>
+          ))}
+        </select>
+        <select
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value)}
           className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm"
@@ -244,6 +288,7 @@ export function VaStatusTable({ vas }: { vas: VaSummary[] }) {
                 <th className="px-4 py-2.5 font-medium">Matter Stage</th>
                 <th className="px-4 py-2.5 font-medium">Work Status</th>
                 <th className="px-4 py-2.5 font-medium">Priority</th>
+                <th className="px-4 py-2.5 font-medium">Checklist</th>
                 <th className="px-4 py-2.5 font-medium">Last Updated</th>
                 <th className="px-4 py-2.5 font-medium">Completed Today</th>
               </tr>
@@ -297,6 +342,18 @@ export function VaStatusTable({ vas }: { vas: VaSummary[] }) {
                       <PriorityBadge priority={va.priority} />
                     ) : (
                       <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {va.checklistProgress === null ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <div className="grid w-24 gap-1">
+                        <Progress value={va.checklistProgress} className="h-1.5" />
+                        <span className="text-xs text-muted-foreground">
+                          {va.checklistProgress}%{va.blockedTaskCount > 0 && ` · ${va.blockedTaskCount} blocked`}
+                        </span>
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">

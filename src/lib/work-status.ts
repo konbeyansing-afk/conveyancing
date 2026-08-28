@@ -48,11 +48,6 @@ export function needsBlockedReason(status: WorkStatus): boolean {
   return status === "BLOCKED";
 }
 
-/** Only one task may be IN_PROGRESS at a time (spec section 16). */
-export function isActiveStatus(status: WorkStatus): boolean {
-  return status === "IN_PROGRESS";
-}
-
 export function summarizeStatuses(items: { status: WorkStatus }[]): Record<WorkStatus, number> {
   const counts: Record<WorkStatus, number> = {
     NOT_STARTED: 0,
@@ -139,9 +134,10 @@ export type VaState = "working" | "blocked" | "pending" | "idle";
 /**
  * Buckets a VA into exactly one state from their current work items, for the
  * Admin overview counts (spec section 10: "8 VAs / 5 Working / 2 Pending /
- * 1 Blocked" always sums to the total). Priority mirrors the one-active-task
- * rule: an in-progress task always wins, then a blocker, then anything
- * queued.
+ * 1 Blocked" always sums to the total). A VA can have several matters open
+ * at once, so this is a priority order over their whole set, not a
+ * reflection of a single active task: any in-progress matter wins, then a
+ * blocker, then anything queued.
  */
 export function classifyVaState(items: { status: WorkStatus }[]): VaState {
   if (items.some((i) => i.status === "IN_PROGRESS")) return "working";
@@ -152,17 +148,11 @@ export function classifyVaState(items: { status: WorkStatus }[]): VaState {
 
 /**
  * The single item a table row or admin summary should represent for a VA who
- * has no active (IN_PROGRESS) task: the most recently touched blocker, else
- * (unless `includeQueued` is false) the most recently touched queued item,
- * else null.
- *
- * `includeQueued: false` is for the VA's own "Currently Working On" spotlight
- * (spec section 3): a blocked task is still the thing they're dealing with
- * and belongs there with its Resolve Blocker action, but a Not
- * Started/Waiting item they haven't touched yet is not "current work" — it
- * belongs in the Pending list, not the hero card. The admin table (the
- * default) still wants *something* to show per VA, so it falls all the way
- * through to a queued item.
+ * has no in-progress matter: the most recently touched blocker, else (unless
+ * `includeQueued` is false) the most recently touched queued item, else
+ * null. A table row can only show one line per VA, so this is a "what's most
+ * worth surfacing" pick, not a claim that it's their only open matter — see
+ * `pickCurrentItems` for the VA's own dashboard, which shows all of them.
  */
 export function pickRepresentativeItem<T extends { status: WorkStatus; updatedAt: Date }>(
   items: T[],
@@ -182,4 +172,22 @@ export function pickRepresentativeItem<T extends { status: WorkStatus; updatedAt
     .filter((i) => i.status === "NOT_STARTED" || i.status === "WAITING_PENDING")
     .sort(byRecency)[0];
   return queued ?? null;
+}
+
+/**
+ * Every matter a VA should see spotlighted in "Currently Working On": a VA
+ * can have several matters in progress at once (there is no one-active-task
+ * limit), so this returns all of them, most recently updated first — one
+ * card each, matching the shape of the cards used across the rest of the
+ * app (the Programs grid, the trainee dashboard's course cards). A VA with
+ * nothing in progress still needs their blockers surfaced (they're still
+ * dealing with those), so this falls back to every blocked matter; a queued
+ * item they haven't touched yet is not "current work" and stays out of this
+ * list — it belongs in My Work / Pending instead.
+ */
+export function pickCurrentItems<T extends { status: WorkStatus; updatedAt: Date }>(items: T[]): T[] {
+  const byRecency = (a: T, b: T) => b.updatedAt.getTime() - a.updatedAt.getTime();
+  const inProgress = items.filter((i) => i.status === "IN_PROGRESS").sort(byRecency);
+  if (inProgress.length > 0) return inProgress;
+  return items.filter((i) => i.status === "BLOCKED").sort(byRecency);
 }

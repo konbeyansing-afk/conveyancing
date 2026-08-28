@@ -1,8 +1,8 @@
 /**
  * Work Status, exercised through the real server actions against the real
  * database: permissions (a VA owns only their own work; only an Admin can
- * add Admin Notes or delete), status transitions and the one-active-task
- * rule, and the WorkActivity audit trail.
+ * add Admin Notes or delete), status transitions across multiple
+ * concurrently open matters, and the WorkActivity audit trail.
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -99,8 +99,8 @@ describe("createWorkItem — permissions", () => {
   });
 });
 
-describe("the one-active-task rule", () => {
-  it("lets a VA start a first active task", async () => {
+describe("a VA can work multiple matters at once — no one-active-task limit", () => {
+  it("lets a VA start a first active matter", async () => {
     asVaOne();
     const result = await workStatus.createWorkItem(
       null,
@@ -108,49 +108,43 @@ describe("the one-active-task rule", () => {
     );
     expect(result).toEqual({ success: "Work status saved." });
 
-    const item = await prisma.workItem.findFirst({ where: { userId: vaOne.id, deletedAt: null } });
+    const item = await prisma.workItem.findFirst({
+      where: { userId: vaOne.id, title: "ZZ-AUDIT Review Contract", deletedAt: null },
+    });
     expect(item?.status).toBe("IN_PROGRESS");
     expect(item?.startedAt).not.toBeNull();
   });
 
-  it("blocks a second active task and reports the conflict instead of creating one", async () => {
+  it("lets the same VA start a second active matter without touching the first", async () => {
     asVaOne();
     const result = await workStatus.createWorkItem(
       null,
-      form({ title: "ZZ-AUDIT Second Task", jurisdiction: "QLD", status: "IN_PROGRESS", priority: "NORMAL" }),
-    );
-    expect(result).toMatchObject({ conflict: { title: "ZZ-AUDIT Review Contract" } });
-
-    const activeCount = await prisma.workItem.count({
-      where: { userId: vaOne.id, status: "IN_PROGRESS", deletedAt: null },
-    });
-    expect(activeCount).toBe(1);
-  });
-
-  it("succeeds once confirmResolution is set after resolving the old task", async () => {
-    asVaOne();
-    const existing = await prisma.workItem.findFirst({
-      where: { userId: vaOne.id, status: "IN_PROGRESS", deletedAt: null },
-    });
-    await workStatus.setWorkItemStatus(existing!.id, "WAITING_PENDING", null, form({}));
-
-    const result = await workStatus.createWorkItem(
-      null,
-      form({
-        title: "ZZ-AUDIT Second Task",
-        jurisdiction: "QLD",
-        status: "IN_PROGRESS",
-        priority: "NORMAL",
-        confirmResolution: "true",
-      }),
+      form({ title: "ZZ-AUDIT Second Matter", jurisdiction: "NSW", status: "IN_PROGRESS", priority: "NORMAL" }),
     );
     expect(result).toEqual({ success: "Work status saved." });
 
     const activeItems = await prisma.workItem.findMany({
       where: { userId: vaOne.id, status: "IN_PROGRESS", deletedAt: null },
     });
-    expect(activeItems).toHaveLength(1);
-    expect(activeItems[0].title).toBe("ZZ-AUDIT Second Task");
+    expect(activeItems.length).toBeGreaterThanOrEqual(2);
+    const first = activeItems.find((i) => i.title === "ZZ-AUDIT Review Contract");
+    expect(first?.status).toBe("IN_PROGRESS");
+  });
+
+  it("updating one active matter's status never changes another's", async () => {
+    asVaOne();
+    const matterA = await prisma.workItem.create({
+      data: { userId: vaOne.id, title: "ZZ-AUDIT Matter A", jurisdiction: "QLD", status: "IN_PROGRESS", priority: "NORMAL" },
+    });
+    const matterB = await prisma.workItem.create({
+      data: { userId: vaOne.id, title: "ZZ-AUDIT Matter B", jurisdiction: "QLD", status: "IN_PROGRESS", priority: "NORMAL" },
+    });
+
+    const result = await workStatus.setWorkItemStatus(matterA.id, "WAITING_PENDING", null, form({}));
+    expect(result).toEqual({ success: "Status updated." });
+
+    const untouchedB = await prisma.workItem.findUnique({ where: { id: matterB.id } });
+    expect(untouchedB?.status).toBe("IN_PROGRESS");
   });
 });
 
@@ -194,14 +188,11 @@ describe("status transitions and the activity audit trail", () => {
     expect(blocked?.status).toBe("BLOCKED");
     expect(blocked?.blockedReason).toBe("Waiting for payout figure");
 
-    // vaOne already has another active task from the one-active-task-rule
-    // tests above, so this transition needs the same confirmResolution flag
-    // a real VA would supply after resolving it.
     await workStatus.setWorkItemStatus(
       item.id,
       "IN_PROGRESS",
       null,
-      form({ note: "Received updated payout.", confirmResolution: "true" }),
+      form({ note: "Received updated payout." }),
     );
 
     const activity = await prisma.workActivity.findMany({
@@ -241,7 +232,7 @@ describe("status transitions and the activity audit trail", () => {
       item.id,
       "IN_PROGRESS",
       null,
-      form({ note: "Additional work required.", confirmResolution: "true" }),
+      form({ note: "Additional work required." }),
     );
     expect(result).toEqual({ success: "Status updated." });
 
@@ -460,15 +451,33 @@ describe("Jurisdiction — a QLD or NSW matter, persisted", () => {
 });
 
 describe("Matter Stage — moving a matter through its conveyancing lifecycle", () => {
-  it("refuses a VA changing the matter stage", async () => {
+  it("lets a VA move the stage on their own matter — they're the one doing the work", async () => {
     asVaOne();
     const item = await prisma.workItem.create({
-      data: { userId: vaOne.id, title: "ZZ-AUDIT VA Cannot Stage", jurisdiction: "QLD", status: "NOT_STARTED", priority: "NORMAL" },
+      data: { userId: vaOne.id, title: "ZZ-AUDIT VA Own Stage", jurisdiction: "QLD", status: "IN_PROGRESS", priority: "NORMAL" },
     });
 
-    await expect(
-      workStatus.updateMatterStage(item.id, null, form({ newStage: "SEARCHES" })),
-    ).rejects.toThrow("Unauthorized");
+    const result = await workStatus.updateMatterStage(item.id, null, form({ newStage: "SEARCHES" }));
+    expect(result).toEqual({ success: "Matter stage updated." });
+
+    const updated = await prisma.workItem.findUnique({ where: { id: item.id } });
+    expect(updated?.matterStage).toBe("SEARCHES");
+
+    const activity = await prisma.workActivity.findFirst({
+      where: { workItemId: item.id, newMatterStage: "SEARCHES" },
+    });
+    expect(activity?.userId).toBe(vaOne.id);
+  });
+
+  it("refuses a VA changing another VA's matter stage", async () => {
+    asVaOne();
+    const item = await prisma.workItem.create({
+      data: { userId: vaOne.id, title: "ZZ-AUDIT VA Cannot Stage Someone Else's", jurisdiction: "QLD", status: "NOT_STARTED", priority: "NORMAL" },
+    });
+
+    asVaTwo();
+    const result = await workStatus.updateMatterStage(item.id, null, form({ newStage: "SEARCHES" }));
+    expect(result).toEqual({ error: "You can only move your own matter's stage." });
 
     const untouched = await prisma.workItem.findUnique({ where: { id: item.id } });
     expect(untouched?.matterStage).toBe("MATTER_OPENING");

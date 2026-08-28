@@ -29,9 +29,10 @@ export const JURISDICTION_LABELS: Record<Jurisdiction, string> = {
 
 export const JURISDICTION_VALUES = Object.keys(JURISDICTION_LABELS) as Jurisdiction[];
 
+/** Which side of the transaction this matter is: PURCHASE = acting for the Purchaser, SALE = acting for the Vendor. */
 export const MATTER_TYPE_LABELS: Record<MatterType, string> = {
-  PURCHASE: "Purchase",
-  SALE: "Sale",
+  PURCHASE: "Purchaser",
+  SALE: "Vendor",
 };
 
 export const MATTER_TYPE_VALUES = Object.keys(MATTER_TYPE_LABELS) as MatterType[];
@@ -48,6 +49,7 @@ export const MATTER_STAGE_LABELS: Record<MatterStage, string> = {
   SEARCHES: "Searches",
   PRE_SETTLEMENT: "Pre-Settlement",
   SETTLEMENT_PREPARATION: "Settlement Preparation",
+  PEXA: "PEXA",
   SETTLEMENT_BOOKED: "Settlement Booked",
   SETTLEMENT: "Settlement",
   POST_SETTLEMENT: "Post-Settlement",
@@ -72,6 +74,7 @@ export const MATTER_WORKFLOWS: Record<Jurisdiction, MatterStage[]> = {
     "BUILDING_PEST",
     "SEARCHES",
     "PRE_SETTLEMENT",
+    "PEXA",
     "SETTLEMENT_BOOKED",
     "SETTLEMENT",
     "POST_SETTLEMENT",
@@ -87,6 +90,7 @@ export const MATTER_WORKFLOWS: Record<Jurisdiction, MatterStage[]> = {
     "SEARCHES",
     "FINANCE",
     "SETTLEMENT_PREPARATION",
+    "PEXA",
     "SETTLEMENT_BOOKED",
     "SETTLEMENT",
     "POST_SETTLEMENT",

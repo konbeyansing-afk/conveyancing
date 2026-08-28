@@ -11,8 +11,11 @@ import { PriorityBadge } from "@/components/work-status/priority-badge";
 import { MatterStageBadge } from "@/components/work-status/matter-stage-badge";
 import { JurisdictionBadge } from "@/components/work-status/jurisdiction-badge";
 import { ConveyancingTimeline } from "@/components/work-status/conveyancing-timeline";
+import { ChecklistPanel } from "@/components/work-status/checklist-panel";
+import { MatterHealthPanel } from "@/components/work-status/matter-health-panel";
 import { WorkItemDetailSheet, type WorkItemDetail } from "@/components/work-status/work-item-detail-sheet";
 import { formatRelativeTime } from "@/lib/format-relative-time";
+import { loadChecklist } from "@/lib/checklist-data";
 import { CheckCircle2, ClipboardList, Hourglass, AlertTriangle } from "lucide-react";
 
 const dateTimeFormat = (d: Date) =>
@@ -85,7 +88,9 @@ export default async function AdminVaWorkStatusDetailPage({
   const detailItems: WorkItemDetail[] = items;
   const now = new Date();
 
-  const currentItem = detailItems.find((i) => i.status === "IN_PROGRESS") ?? null;
+  // A VA can have several matters in progress at once — no one-active-task
+  // limit — so this is every in-progress matter, not just one.
+  const inProgressItems = detailItems.filter((i) => i.status === "IN_PROGRESS");
   const pendingItems = detailItems.filter((i) => i.status === "NOT_STARTED" || i.status === "WAITING_PENDING");
   const blockedItems = detailItems.filter((i) => i.status === "BLOCKED");
   const completedTodayItems = detailItems.filter(
@@ -102,6 +107,14 @@ export default async function AdminVaWorkStatusDetailPage({
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, 20);
 
+  const checklists = await Promise.all(
+    inProgressItems.map(async (item) => [
+      item.id,
+      await loadChecklist(item.id, item.jurisdiction, item.matterType, item.matterStage),
+    ] as const),
+  );
+  const checklistByItemId = new Map(checklists);
+
   return (
     <div className="grid gap-6">
       <PageHeader
@@ -111,11 +124,7 @@ export default async function AdminVaWorkStatusDetailPage({
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          label="Current Status"
-          value={currentItem ? WORK_STATUS_LABELS[currentItem.status] : "No active task"}
-          icon={ClipboardList}
-        />
+        <StatCard label="In Progress" value={inProgressItems.length} icon={ClipboardList} />
         <StatCard
           label="Last Update"
           value={lastUpdated ? formatRelativeTime(lastUpdated) : "Never"}
@@ -130,53 +139,65 @@ export default async function AdminVaWorkStatusDetailPage({
         />
       </div>
 
-      {currentItem && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Current Matter</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <JurisdictionBadge jurisdiction={currentItem.jurisdiction} />
-              <MatterStageBadge stage={currentItem.matterStage} />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase">Current Task</p>
-                <p className="font-medium">{currentItem.title}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase">Work Status</p>
-                <StatusBadge status={currentItem.status} className="mt-1" />
-              </div>
-            </div>
-            <ConveyancingTimeline
-              jurisdiction={currentItem.jurisdiction}
-              currentStage={currentItem.matterStage}
-              isWorkBlocked={currentItem.status === "BLOCKED"}
-            />
-            {nextMatterStageLabel(currentItem.jurisdiction, currentItem.matterStage) && (
-              <p className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">Next Matter Stage:</span>{" "}
-                {nextMatterStageLabel(currentItem.jurisdiction, currentItem.matterStage)}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Current Work</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {currentItem ? (
-            <WorkItemRow item={currentItem} canAddAdminNote={canAddAdminNote} canEditMatterStage={canEditMatterStage} />
-          ) : (
-            <p className="text-sm text-muted-foreground">Nothing marked in progress.</p>
-          )}
-        </CardContent>
-      </Card>
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Current Matters</h2>
+        {inProgressItems.length === 0 ? (
+          <Card>
+            <CardContent className="py-6 text-center text-sm text-muted-foreground">
+              Nothing marked in progress.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {inProgressItems.map((item) => {
+              const checklist = checklistByItemId.get(item.id) ?? { tasks: [], issues: [] };
+              return (
+                <Card key={item.id}>
+                  <CardHeader>
+                    <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+                      <span className="truncate">{item.title}</span>
+                      <WorkItemDetailSheet
+                        item={item}
+                        canAddAdminNote={canAddAdminNote}
+                        canEditMatterStage={canEditMatterStage}
+                      />
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <JurisdictionBadge jurisdiction={item.jurisdiction} />
+                      <MatterStageBadge stage={item.matterStage} />
+                      <PriorityBadge priority={item.priority} />
+                    </div>
+                    {item.matterReference && (
+                      <p className="text-xs text-muted-foreground">Matter #{item.matterReference}</p>
+                    )}
+                    <ConveyancingTimeline
+                      jurisdiction={item.jurisdiction}
+                      currentStage={item.matterStage}
+                      isWorkBlocked={item.status === "BLOCKED"}
+                    />
+                    {nextMatterStageLabel(item.jurisdiction, item.matterStage) && (
+                      <p className="text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground">Next Matter Stage:</span>{" "}
+                        {nextMatterStageLabel(item.jurisdiction, item.matterStage)}
+                      </p>
+                    )}
+                    <ChecklistPanel
+                      workItemId={item.id}
+                      jurisdiction={item.jurisdiction}
+                      matterStage={item.matterStage}
+                      tasks={checklist.tasks}
+                      canEdit={canEditMatterStage}
+                    />
+                    {checklist.tasks.length > 0 && <MatterHealthPanel issues={checklist.issues} />}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <Card>
         <CardHeader>
