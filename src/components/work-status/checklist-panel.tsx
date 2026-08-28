@@ -241,6 +241,11 @@ export function ChecklistPanel({
   canEdit: boolean;
 }) {
   const [openStage, setOpenStage] = useState<MatterStage | null>(matterStage);
+  // Collapsed by default: with several matters open at once, a full
+  // stage-by-stage breakdown on every card gets very long very fast. The
+  // progress bar and the stage-gate banner (the two things actually worth
+  // seeing at a glance) stay visible either way.
+  const [showStages, setShowStages] = useState(false);
 
   if (tasks.length === 0) {
     return (
@@ -276,6 +281,16 @@ export function ChecklistPanel({
         canEdit={canEdit}
       />
 
+      <button
+        type="button"
+        onClick={() => setShowStages((v) => !v)}
+        className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+      >
+        <ChevronDown className={`size-3.5 transition-transform ${showStages ? "rotate-180" : ""}`} />
+        {showStages ? "Hide checklist" : `Show checklist (${stages.length} stages)`}
+      </button>
+
+      {showStages && (
       <div className="grid gap-2">
         {stages.map((stage) => {
           const stageTasks = tasksForStage(tasks, stage);
@@ -316,6 +331,7 @@ export function ChecklistPanel({
           );
         })}
       </div>
+      )}
     </div>
   );
 }
