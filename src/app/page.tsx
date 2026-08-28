@@ -5,6 +5,7 @@ import type { Role } from "@prisma/client";
 function roleHome(role?: Role) {
   if (role === "ADMIN") return "/admin";
   if (role === "TRAINER") return "/trainer";
+  if (role === "VA") return "/va";
   return "/app";
 }
 

@@ -6,6 +6,7 @@ function roleHome(role?: Role) {
   if (role === "ADMIN") return "/admin";
   if (role === "TRAINER") return "/trainer";
   if (role === "TRAINEE") return "/app";
+  if (role === "VA") return "/va";
   return "/login";
 }
 
@@ -28,7 +29,15 @@ export default auth((req) => {
     return NextResponse.redirect(new URL(roleHome(role), req.url));
   }
 
-  if (pathname.startsWith("/admin") && role !== "ADMIN") {
+  // Work Status is the one /admin area a Trainer can also reach (to move a
+  // matter through its conveyancing stage) — every other /admin route stays
+  // Admin-only.
+  const isWorkStatusPath = pathname.startsWith("/admin/work-status");
+  if (isWorkStatusPath && role !== "ADMIN" && role !== "TRAINER") {
+    return NextResponse.redirect(new URL(roleHome(role), req.url));
+  }
+
+  if (pathname.startsWith("/admin") && !isWorkStatusPath && role !== "ADMIN") {
     return NextResponse.redirect(new URL(roleHome(role), req.url));
   }
 
@@ -38,6 +47,10 @@ export default auth((req) => {
 
   if (pathname.startsWith("/app") && !role) {
     return NextResponse.redirect(new URL("/login", req.url));
+  }
+
+  if (pathname.startsWith("/va") && role !== "VA") {
+    return NextResponse.redirect(new URL(roleHome(role), req.url));
   }
 
   return NextResponse.next();

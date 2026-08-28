@@ -31,7 +31,11 @@ const serverUp = await (async () => {
 
 let adminCookie = "";
 let traineeCookie = "";
+let vaCookie = "";
+let trainerCookie = "";
 let traineeId = "";
+let vaId = "";
+let trainerId = "";
 let publishedCourseId: string | null = null;
 let publishedLessonId: string | null = null;
 
@@ -77,11 +81,35 @@ beforeAll(async () => {
   });
   traineeId = trainee.id;
 
+  // A throwaway VA whose password this suite knows. Removed in afterAll.
+  const va = await prisma.user.create({
+    data: {
+      name: "ZZ-AUDIT Route VA",
+      email: `route.va.${Date.now()}@example.test`,
+      passwordHash: await bcrypt.hash(TRAINEE_PASSWORD, 10),
+      role: "VA",
+    },
+  });
+  vaId = va.id;
+
+  // A throwaway Trainer whose password this suite knows. Removed in afterAll.
+  const trainerUser = await prisma.user.create({
+    data: {
+      name: "ZZ-AUDIT Route Trainer",
+      email: `route.trainer.${Date.now()}@example.test`,
+      passwordHash: await bcrypt.hash(TRAINEE_PASSWORD, 10),
+      role: "TRAINER",
+    },
+  });
+  trainerId = trainerUser.id;
+
   adminCookie = await login(
     process.env.SEED_ADMIN_EMAIL ?? "admin@conveyancingacademy.local",
     process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!",
   );
   traineeCookie = await login(trainee.email, TRAINEE_PASSWORD);
+  vaCookie = await login(va.email, TRAINEE_PASSWORD);
+  trainerCookie = await login(trainerUser.email, TRAINEE_PASSWORD);
 
   // A real published lesson to point the trainee at, if the database has one.
   const lesson = await prisma.lesson.findFirst({
@@ -96,6 +124,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (traineeId) await prisma.user.deleteMany({ where: { id: traineeId } });
+  if (vaId) await prisma.user.deleteMany({ where: { id: vaId } });
+  if (trainerId) await prisma.user.deleteMany({ where: { id: trainerId } });
 });
 
 const describeIfUp = () => (serverUp ? describe : describe.skip);
@@ -114,6 +144,7 @@ const ADMIN_ROUTES = [
   "/admin/certificates",
   "/admin/reports",
   "/admin/resources",
+  "/admin/work-status",
   "/admin/users",
 ];
 const TRAINER_ROUTES = ["/trainer", "/trainer/trainees"];
@@ -128,9 +159,10 @@ const TRAINEE_ROUTES = [
   "/app/tools/actionstep",
   "/app/tools/settlement-calculator",
 ];
+const VA_ROUTES = ["/va"];
 
 describeIfUp()("Unauthenticated access", () => {
-  for (const path of [...ADMIN_ROUTES, ...TRAINER_ROUTES, ...TRAINEE_ROUTES]) {
+  for (const path of [...ADMIN_ROUTES, ...TRAINER_ROUTES, ...TRAINEE_ROUTES, ...VA_ROUTES]) {
     it(`redirects ${path} to the login page`, async () => {
       const res = await get(path);
       expect(res.status).toBe(307);
@@ -165,10 +197,102 @@ describeIfUp()("Admin access", () => {
     }
   });
 
+  it("bounces an admin off the VA workspace — it is VA-only, not admin territory", async () => {
+    for (const path of VA_ROUTES) {
+      const res = await get(path, adminCookie);
+      expect(res.status, path).toBe(307);
+      expect(res.headers.get("location")).toContain("/admin");
+    }
+  });
+
   it("sends an admin away from the login page", async () => {
     const res = await get("/login", adminCookie);
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/admin");
+  });
+});
+
+describeIfUp()("VA access", () => {
+  for (const path of VA_ROUTES) {
+    it(`renders ${path}`, async () => {
+      const res = await get(path, vaCookie);
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      expect(html).not.toContain("Application error");
+      expect(html).not.toContain("Internal Server Error");
+    });
+  }
+
+  for (const path of ADMIN_ROUTES) {
+    it(`bounces a VA off ${path}`, async () => {
+      const res = await get(path, vaCookie);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/va");
+    });
+  }
+
+  for (const path of TRAINER_ROUTES) {
+    it(`bounces a VA off ${path}`, async () => {
+      const res = await get(path, vaCookie);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/va");
+    });
+  }
+
+  it("sends a VA away from the login page", async () => {
+    const res = await get("/login", vaCookie);
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/va");
+  });
+});
+
+describeIfUp()("Trainer access", () => {
+  for (const path of TRAINER_ROUTES) {
+    it(`renders ${path}`, async () => {
+      const res = await get(path, trainerCookie);
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      expect(html).not.toContain("Application error");
+      expect(html).not.toContain("Internal Server Error");
+    });
+  }
+
+  it("lets a trainer into Work Status — the one /admin area they can also reach", async () => {
+    const res = await get("/admin/work-status", trainerCookie);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).not.toContain("Application error");
+    // Should see their own sidebar chrome, not the full Admin one — the
+    // "Trainer workspace" header text itself isn't a reliable substring to
+    // assert on: React streams `{roleLabel} workspace` as two text nodes
+    // separated by an `<!-- -->` hydration marker, so the literal phrase
+    // never appears contiguously in the raw HTML. The nav links prove the
+    // same thing more robustly: Admin-only links must be absent.
+    expect(html).toContain('href="/trainer"');
+    expect(html).not.toContain('href="/admin/users"');
+    expect(html).not.toContain('href="/admin/programs"');
+  });
+
+  for (const path of ADMIN_ROUTES.filter((p) => p !== "/admin/work-status")) {
+    it(`bounces a trainer off ${path}`, async () => {
+      const res = await get(path, trainerCookie);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/trainer");
+    });
+  }
+
+  for (const path of VA_ROUTES) {
+    it(`bounces a trainer off ${path}`, async () => {
+      const res = await get(path, trainerCookie);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/trainer");
+    });
+  }
+
+  it("sends a trainer away from the login page", async () => {
+    const res = await get("/login", trainerCookie);
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/trainer");
   });
 });
 
@@ -191,6 +315,14 @@ describeIfUp()("Trainee access", () => {
   }
 
   for (const path of TRAINER_ROUTES) {
+    it(`bounces a trainee off ${path}`, async () => {
+      const res = await get(path, traineeCookie);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/app");
+    });
+  }
+
+  for (const path of VA_ROUTES) {
     it(`bounces a trainee off ${path}`, async () => {
       const res = await get(path, traineeCookie);
       expect(res.status).toBe(307);
@@ -232,16 +364,24 @@ function statCardValue(html: string, label: string): number | null {
  * ZZ-AUDIT courses and programs the whole time — a real gap between the two
  * reads is expected, not a bug. A genuine double-counting regression fails
  * every attempt identically; a transient race resolves within a retry or two.
+ *
+ * The retry budget below is deliberately generous (attempts, and a short
+ * backoff between them) rather than tight: this file's own suite runs
+ * alongside every other suite in the same `pnpm check` pass, and a bigger
+ * parallel run just means other suites' create/delete churn takes longer to
+ * settle — not that this page is double-counting anything.
  */
 async function expectStatCardMatchesLiveCount(
   label: string,
   fetchPage: () => Promise<string>,
   liveCount: () => Promise<number>,
 ) {
-  const ATTEMPTS = 5;
+  const ATTEMPTS = 10;
+  const BACKOFF_MS = 300;
   let lastShown: number | null = null;
   let lastActual = -1;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, BACKOFF_MS));
     const html = await fetchPage();
     lastShown = statCardValue(html, label);
     lastActual = await liveCount();
@@ -418,7 +558,22 @@ describeIfUp()("Bad and hostile input", () => {
       const res = await get(`/admin/programs/${id}`, adminCookie);
       expect([404, 400]).toContain(res.status);
     });
+
+    it(`404s an unknown VA id on the work status detail page (${id.slice(0, 20)})`, async () => {
+      const res = await get(`/admin/work-status/${id}`, adminCookie);
+      expect([404, 400]).toContain(res.status);
+    });
   }
+
+  it("404s a real user id that is not a VA (role confusion, not just a missing id)", async () => {
+    const res = await get(`/admin/work-status/${traineeId}`, adminCookie);
+    expect(res.status).toBe(404);
+  });
+
+  it("renders a real VA's work status detail page for an admin", async () => {
+    const res = await get(`/admin/work-status/${vaId}`, adminCookie);
+    expect(res.status).toBe(200);
+  });
 
   it("does not reflect a script tag back into the page unescaped", async () => {
     const res = await get(`/app/courses/${encodeURIComponent("<script>alert(1)</script>")}`, traineeCookie);

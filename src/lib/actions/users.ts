@@ -7,7 +7,7 @@ import { requireRole } from "@/lib/require-role";
 import { generatePassword, passwordsMatch, validatePassword } from "@/lib/password-policy";
 import type { Role } from "@prisma/client";
 
-const VALID_ROLES: Role[] = ["ADMIN", "TRAINER", "TRAINEE"];
+const VALID_ROLES: Role[] = ["ADMIN", "TRAINER", "TRAINEE", "VA"];
 
 export type CreateUserState = { error?: string } | null;
 

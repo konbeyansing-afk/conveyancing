@@ -33,6 +33,7 @@ export function CreateUserForm() {
         >
           <option value="TRAINEE">Trainee</option>
           <option value="TRAINER">Trainer</option>
+          <option value="VA">VA</option>
           <option value="ADMIN">Admin</option>
         </select>
       </div>

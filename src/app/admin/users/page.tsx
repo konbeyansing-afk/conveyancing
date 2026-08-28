@@ -27,7 +27,7 @@ export default async function AdminUsersPage() {
       <div>
         <h1 className="text-2xl font-semibold">Users</h1>
         <p className="text-muted-foreground">
-          Invite trainees and trainers, and manage roles.
+          Invite trainees, trainers and VAs, and manage roles.
         </p>
       </div>
 
@@ -77,12 +77,14 @@ export default async function AdminUsersPage() {
                   ) : (
                     <form action={updateRoleWithId} className="flex items-center gap-2">
                       <select
+                        key={user.role}
                         name="role"
                         defaultValue={user.role}
                         className="h-8 rounded-lg border border-input bg-background px-2.5 text-sm"
                       >
                         <option value="TRAINEE">Trainee</option>
                         <option value="TRAINER">Trainer</option>
+                        <option value="VA">VA</option>
                         <option value="ADMIN">Admin</option>
                       </select>
                       <Button type="submit" variant="outline" size="sm">

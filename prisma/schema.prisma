@@ -10,6 +10,68 @@ enum Role {
   ADMIN
   TRAINER
   TRAINEE
+  VA
+}
+
+enum WorkStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  WAITING_PENDING
+  BLOCKED
+  COMPLETED
+}
+
+enum WorkPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+/**
+ * The Australian state/territory a matter's conveyancing rules follow.
+ * Only QLD and NSW are supported today; the enum and the workflow
+ * configuration in src/lib/matter-stage.ts are both designed so VIC/SA/WA/
+ * ACT/TAS/NT can be added later without restructuring either.
+ */
+enum Jurisdiction {
+  QLD
+  NSW
+}
+
+enum MatterType {
+  PURCHASE
+  SALE
+}
+
+/**
+ * Where a property transaction (matter) currently sits in its conveyancing
+ * lifecycle — independent of WorkStatus, which describes what the VA's own
+ * work is doing right now. Stable, jurisdiction-agnostic identifiers: which
+ * of these are valid, and in what order, is a property of the matter's
+ * Jurisdiction, not of this enum — see MATTER_WORKFLOWS in
+ * src/lib/matter-stage.ts, the single source of truth for that mapping and
+ * for human-friendly labels. A handful of values exist for exactly one
+ * jurisdiction today (e.g. BUILDING_PEST is QLD-only, CONTRACT_EXCHANGE is
+ * NSW-only); most are shared because the concept is genuinely the same.
+ */
+enum MatterStage {
+  MATTER_OPENING
+  CONTRACT_REVIEW
+  CONTRACT_SIGNED // QLD
+  CONTRACT_EXCHANGE // NSW
+  COOLING_OFF
+  FINANCE
+  BUILDING_PEST // QLD
+  SEARCHES
+  PRE_SETTLEMENT
+  SETTLEMENT_PREPARATION // NSW
+  SETTLEMENT_BOOKED
+  SETTLEMENT
+  POST_SETTLEMENT
+  LODGEMENT_REGISTRATION // NSW
+  MATTER_FINALISATION
+  COMPLETED
 }
 
 enum QuestionType {
@@ -49,6 +111,102 @@ model User {
   assignedTrainers       TrainerAssignment[] @relation("TraineeOf")
   notesAbout             TraineeNote[]       @relation("NotesAbout")
   notesWritten           TraineeNote[]       @relation("NotesWritten")
+  workItems              WorkItem[]          @relation("WorkItemOwner")
+  workItemsDeleted       WorkItem[]          @relation("WorkItemDeletedBy")
+  workActivity           WorkActivity[]
+  workAdminNotes         WorkAdminNote[]
+}
+
+/**
+ * A VA's unit of work: one task, matter or piece of follow-up. `status` and
+ * the timestamp/blocked fields describe the *current* state only — every
+ * change to them is additionally logged to WorkActivity, which is the audit
+ * trail and is never overwritten. A VA is limited to one WorkItem with
+ * status=IN_PROGRESS at a time (enforced in the server actions, not here);
+ * everything else is history or queued.
+ * Soft-deleted rather than removed, so an admin deletion is auditable — see
+ * deletedAt/deletedById.
+ */
+model WorkItem {
+  id                  String          @id @default(cuid())
+  userId              String
+  user                User            @relation("WorkItemOwner", fields: [userId], references: [id], onDelete: Cascade)
+  title               String
+  matterReference     String?
+  clientReference     String?
+  /**
+   * Defaults to QLD: the only jurisdiction this platform has ever supported
+   * (see README — "QLD Conveyancing is the first program"), so it is the
+   * only safe default for rows that predate this field.
+   */
+  jurisdiction        Jurisdiction    @default(QLD)
+  matterType          MatterType?
+  matterStage         MatterStage     @default(MATTER_OPENING)
+  status              WorkStatus      @default(NOT_STARTED)
+  priority            WorkPriority    @default(NORMAL)
+  notes               String?
+  blockedReason       String?
+  blockedNeeds        String?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  estimatedCompletion DateTime?
+  deletedAt           DateTime?
+  deletedById         String?
+  deletedBy           User?           @relation("WorkItemDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  activity            WorkActivity[]
+  adminNotes          WorkAdminNote[]
+
+  @@index([userId, status])
+  @@index([userId, deletedAt])
+  @@index([status, deletedAt])
+  @@index([completedAt])
+  @@index([userId, matterStage])
+  @@index([matterStage, deletedAt])
+  @@index([jurisdiction, deletedAt])
+}
+
+/**
+ * One row per status change (and per plain note, where previousStatus equals
+ * newStatus), and separately per matter-stage change — the append-only
+ * history a WorkItem's current fields cannot provide on their own. `userId`
+ * is always the authenticated actor who made the change, never a
+ * client-supplied value. previousMatterStage/newMatterStage are set only on
+ * a stage-change entry (null otherwise), the same way previousStatus/
+ * newStatus are always set but equal on a plain note.
+ */
+model WorkActivity {
+  id                  String       @id @default(cuid())
+  workItemId          String
+  workItem            WorkItem     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  userId              String
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  previousStatus      WorkStatus?
+  newStatus           WorkStatus
+  previousMatterStage MatterStage?
+  newMatterStage      MatterStage?
+  note                String?
+  createdAt           DateTime     @default(now())
+
+  @@index([workItemId, createdAt])
+}
+
+/**
+ * An admin-only annotation on a WorkItem, kept distinct from the VA's own
+ * notes/activity so the two are never confused in the UI.
+ */
+model WorkAdminNote {
+  id          String   @id @default(cuid())
+  workItemId  String
+  workItem    WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  adminUserId String
+  adminUser   User     @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  note        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workItemId, createdAt])
 }
 
 model Program {
