@@ -76,9 +76,14 @@ function Feedback({ state }: { state: WorkActionState }) {
  * when `item` is supplied, to edit an existing one (a matter card's
  * "Update" quick action). Same fields either way; a VA can have several
  * matters open at once, so starting a new one never touches any other.
- * Uncontrolled/no auto-close on success, matching the rest of the app's
- * action dialogs — a success message is shown in place and the VA
- * dismisses manually.
+ *
+ * `key`-remounted from the outer {@link UpdateWorkStatusDialog} on every
+ * successful save: the dialog closes and returns to the dashboard (which
+ * re-sorts to show the just-saved matter first, since the list is already
+ * ordered by `updatedAt desc` and the save revalidates it), and the form
+ * comes back completely blank next time it's opened rather than still
+ * showing whatever was last typed — a fresh mount re-runs every `useState`
+ * initializer, so this replaces manually resetting each field by hand.
  *
  * Every field is React-controlled rather than left as an uncontrolled
  * `defaultValue` input, matching the DOM-resync pattern used for the
@@ -86,17 +91,35 @@ function Feedback({ state }: { state: WorkActionState }) {
  * every submission, and React does not always notice an uncontrolled
  * `<select>`'s value now disagrees with state after that reset.
  */
-export function UpdateWorkStatusDialog({
+function UpdateWorkStatusForm({
   item,
   trigger,
   triggerClassName,
+  onSaved,
 }: {
   item?: EditableWorkItem;
   trigger?: ReactNode;
   triggerClassName?: string;
+  onSaved: () => void;
 }) {
   const action = item ? updateWorkItem.bind(null, item.id) : createWorkItem;
   const [state, formAction, pending] = useActionState(action, null);
+  const [open, setOpen] = useState(false);
+
+  // Close and hand back to the parent (which remounts this form fresh) once
+  // the save actually succeeds — not on every render, so a second open of
+  // an unrelated dialog instance never fires this from a leftover state.
+  const handledSuccessRef = useRef(false);
+  useEffect(() => {
+    if (state?.success && !handledSuccessRef.current) {
+      handledSuccessRef.current = true;
+      setOpen(false);
+      // Let the close transition play before remounting, so the dialog
+      // animates out instead of vanishing mid-close.
+      const timer = setTimeout(onSaved, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [state, onSaved]);
 
   const [title, setTitle] = useState(item?.title ?? "");
   const [matterReference, setMatterReference] = useState(item?.matterReference ?? "");
@@ -145,7 +168,7 @@ export function UpdateWorkStatusDialog({
   });
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button className={triggerClassName} />}>
         {trigger ?? (
           <>
@@ -337,5 +360,28 @@ export function UpdateWorkStatusDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function UpdateWorkStatusDialog({
+  item,
+  trigger,
+  triggerClassName,
+}: {
+  item?: EditableWorkItem;
+  trigger?: ReactNode;
+  triggerClassName?: string;
+}) {
+  // Bumped on every successful save to remount UpdateWorkStatusForm fresh —
+  // see the comment above it for why.
+  const [formKey, setFormKey] = useState(0);
+  return (
+    <UpdateWorkStatusForm
+      key={formKey}
+      item={item}
+      trigger={trigger}
+      triggerClassName={triggerClassName}
+      onSaved={() => setFormKey((k) => k + 1)}
+    />
   );
 }
