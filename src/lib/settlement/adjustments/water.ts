@@ -21,18 +21,32 @@ import type {
   AdjustmentMessage,
   CalculationTrailStep,
   ManualOverride,
+  Party,
   PaymentStatus,
 } from "../types";
 
-export type WaterComponent = "ACCESS_CHARGE" | "USAGE" | "SEWERAGE" | "OTHER_WATER_CHARGE";
-export type WaterCalcMode = "FLAT" | "METERED";
+export type WaterComponent = "ACCESS_CHARGE" | "USAGE" | "SEWERAGE" | "ARREARS" | "CREDIT" | "OTHER_WATER_CHARGE";
+export type WaterCalcMode = "FLAT" | "METERED" | "ARREARS_CREDIT";
 
 export const WATER_COMPONENT_LABEL: Record<WaterComponent, string> = {
   ACCESS_CHARGE: "Water access/service charge",
   USAGE: "Water usage",
   SEWERAGE: "Sewerage",
+  ARREARS: "Arrears (pre-existing amount owed)",
+  CREDIT: "Credit balance",
   OTHER_WATER_CHARGE: "Other water charge",
 };
+
+/** Where a figure on the water card came from — purely a record for audit, never affects the calculation. */
+export type WaterSourceDocument = "WATER_BILL" | "RATES_NOTICE" | "SETTLEMENT_STATEMENT" | "OTHER";
+export const WATER_SOURCE_DOCUMENT_LABEL: Record<WaterSourceDocument, string> = {
+  WATER_BILL: "Water Bill",
+  RATES_NOTICE: "Rates Notice",
+  SETTLEMENT_STATEMENT: "Settlement Statement",
+  OTHER: "Other",
+};
+
+export type WaterSourceStatus = "VERIFIED" | "NEEDS_VERIFICATION" | "MISSING";
 
 export interface WaterAdjustmentInput {
   id: string;
@@ -58,6 +72,19 @@ export interface WaterAdjustmentInput {
   propertySharePercent: number | null;
   usageRatePerKLCents: Cents | null;
   fixedAccessChargeCents: Cents | null;
+  // ARREARS_CREDIT mode only — never prorated, never auto-directed (see calculateArrearsOrCredit)
+  manualAmountCents: Cents | null;
+  /** Arrears: who is responsible for paying it. Credit: who the credit is owed to. */
+  relatedParty: Party | null;
+  // Bill metadata — audit trail only, no effect on the calculated amount
+  waterAuthority: string;
+  noticeNumber: string;
+  issueDate: IsoDate | null;
+  dueDate: IsoDate | null;
+  sourceDocument: WaterSourceDocument | null;
+  sourceStatus: WaterSourceStatus;
+  /** What the notice states as the grand total, for reconciling against the sum of every water component on this matter — see reconcileWaterBillTotal. */
+  billTotalCents: Cents | null;
 }
 
 export function newWaterAdjustmentInput(id: string, component: WaterComponent = "ACCESS_CHARGE"): WaterAdjustmentInput {
@@ -65,7 +92,7 @@ export function newWaterAdjustmentInput(id: string, component: WaterComponent = 
     id,
     label: "",
     component,
-    waterMode: "FLAT",
+    waterMode: component === "ARREARS" || component === "CREDIT" ? "ARREARS_CREDIT" : "FLAT",
     amountCents: null,
     periodStart: null,
     periodEnd: null,
@@ -82,6 +109,15 @@ export function newWaterAdjustmentInput(id: string, component: WaterComponent = 
     propertySharePercent: null,
     usageRatePerKLCents: null,
     fixedAccessChargeCents: null,
+    manualAmountCents: null,
+    relatedParty: null,
+    waterAuthority: "",
+    noticeNumber: "",
+    issueDate: null,
+    dueDate: null,
+    sourceDocument: null,
+    sourceStatus: "NEEDS_VERIFICATION",
+    billTotalCents: null,
   };
 }
 
@@ -90,7 +126,134 @@ export function calculateWaterAdjustment(
   ctx: { settlementDate: IsoDate | null },
 ): AdjustmentCalculationResult {
   if (input.waterMode === "METERED") return calculateMeteredWater(input, ctx);
+  if (input.waterMode === "ARREARS_CREDIT") return calculateArrearsOrCredit(input);
   return calculateFlatWater(input, ctx);
+}
+
+/* ------------------------------------------------------------------ */
+/* ARREARS_CREDIT mode — a pre-existing amount, never prorated, never  */
+/* auto-directed (same discipline as Land Tax: ask, never assume)       */
+/* ------------------------------------------------------------------ */
+
+function calculateArrearsOrCredit(input: WaterAdjustmentInput): AdjustmentCalculationResult {
+  const label = input.label.trim() || WATER_COMPONENT_LABEL[input.component];
+  const isCredit = input.component === "CREDIT";
+
+  const messages: AdjustmentMessage[] = [
+    warning(
+      isCredit
+        ? "A credit balance is a pre-existing amount on the account, not a period-based charge — confirm from the actual notice/statement who it's owed to before relying on this figure."
+        : "Arrears are a pre-existing amount from before this billing period, not a period-based charge — confirm from the actual notice/statement who is responsible before relying on this figure.",
+    ),
+  ];
+
+  if (input.manualAmountCents === null || !isNonNegative(input.manualAmountCents) || input.manualAmountCents === 0) {
+    messages.push(error(`Enter the ${isCredit ? "credit" : "arrears"} amount.`));
+  }
+  if (!input.relatedParty) {
+    messages.push(error(isCredit ? "Specify which party this credit is owed to." : "Specify which party is responsible for this arrears amount."));
+  }
+
+  // Arrears: the responsible party owes it (debited). Credit: the named
+  // party is owed it (credited), so the other party is the ledger's debit side.
+  const overrideDebitParty: Party = isCredit
+    ? input.relatedParty === "SELLER"
+      ? "BUYER"
+      : "SELLER"
+    : (input.relatedParty ?? "SELLER");
+
+  if (messages.some((m) => m.tier === "error")) {
+    return finalizeAdjustmentResult({
+      id: input.id,
+      category: "WATER",
+      override: input.override,
+      overrideDescription: `${label} — manual override`,
+      overrideDebitParty,
+      messages,
+      automatic: null,
+    });
+  }
+
+  const trail: CalculationTrailStep[] = [
+    { label: isCredit ? "Credit amount" : "Arrears amount", value: formatAUD(input.manualAmountCents as Cents) },
+    { label: "Treatment", value: "Not prorated — a pre-existing balance, not a period-based charge." },
+    { label: isCredit ? "Owed to" : "Payable by", value: input.relatedParty === "SELLER" ? "Seller" : "Buyer" },
+  ];
+
+  const ledgerEntries = mirroredEntries({
+    sourceAdjustmentId: input.id,
+    category: "WATER",
+    amountCents: input.manualAmountCents as Cents,
+    description: `${label} — settlement adjustment`,
+    debitParty: overrideDebitParty,
+  });
+
+  const reconcileMsg = reconcileAgainstFigure(input.manualAmountCents as Cents, input.referenceFigureCents, "reference");
+  if (reconcileMsg) messages.push(reconcileMsg);
+
+  return finalizeAdjustmentResult({
+    id: input.id,
+    category: "WATER",
+    override: input.override,
+    overrideDescription: `${label} — manual override`,
+    overrideDebitParty,
+    messages,
+    automatic: { ledgerEntries, trail },
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Bill-total reconciliation — across every water component on one     */
+/* matter, against whatever the notice itself states as the total       */
+/* ------------------------------------------------------------------ */
+
+export interface WaterBillReconciliation {
+  /** Sum of every water component's calculated (effective) amount. */
+  componentSumCents: Cents;
+  /** The notice's own stated total, if any item recorded one. Multiple different values across items is itself flagged. */
+  billTotalCents: Cents | null;
+  differenceCents: Cents;
+  reconciles: boolean;
+  conflictingTotals: boolean;
+}
+
+/**
+ * Compares the sum of every water adjustment's calculated amount against
+ * whatever the source notice states as its grand total (spec section 18) —
+ * entered on any one water item's `billTotalCents`. Returns null when no
+ * item has recorded a bill total, since there's nothing to reconcile
+ * against yet (not an error — most matters won't have this filled in).
+ */
+export function reconcileWaterBillTotal(
+  items: WaterAdjustmentInput[],
+  results: Map<string, AdjustmentCalculationResult>,
+): WaterBillReconciliation | null {
+  const totals = new Set(items.map((i) => i.billTotalCents).filter((c): c is Cents => c !== null));
+  if (totals.size === 0) return null;
+
+  const componentSumCents = addCents(
+    ...items.map((i) => {
+      const effective = results.get(i.id)?.effective;
+      if (!effective) return 0;
+      // Every component contributes its debit-side amount once (the mirrored
+      // credit is the same figure on the other party, so summing both would
+      // double count) — the buyer-side entry's amount is that figure regardless
+      // of which party it debits, since mirroredEntries always uses one amount.
+      return effective.ledgerEntries[0]?.amountCents ?? 0;
+    }),
+  );
+
+  const conflictingTotals = totals.size > 1;
+  const billTotalCents = ([...totals][0] as Cents) ?? null;
+  const differenceCents = Math.abs(componentSumCents - (billTotalCents ?? componentSumCents));
+
+  return {
+    componentSumCents,
+    billTotalCents: conflictingTotals ? null : billTotalCents,
+    differenceCents,
+    reconciles: !conflictingTotals && differenceCents === 0,
+    conflictingTotals,
+  };
 }
 
 /* ------------------------------------------------------------------ */

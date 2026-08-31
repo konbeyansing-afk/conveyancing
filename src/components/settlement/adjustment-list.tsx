@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { useSettlement } from "@/lib/settlement/store";
 import { computeAdjustmentResults } from "@/lib/settlement/compute";
 import { jurisdictionCategoryLabel } from "@/lib/settlement/jurisdiction-labels";
+import { isValidIsoDate } from "@/lib/settlement/dates";
+import { prorateByPeriod } from "@/lib/settlement/proration";
+import { reconcileWaterBillTotal } from "@/lib/settlement/adjustments/water";
 import type { AdjustmentCategory } from "@/lib/settlement/types";
 import type { Jurisdiction } from "@prisma/client";
 import type { RatesAdjustmentInput } from "@/lib/settlement/adjustments/rates";
@@ -17,6 +20,10 @@ import { AdjustmentCard } from "./adjustment-card";
 import { RatesForm } from "./forms/rates-form";
 import { BodyCorporateForm } from "./forms/body-corporate-form";
 import { WaterForm } from "./forms/water-form";
+import { WaterTimeline } from "./water-timeline";
+import { WaterStatusLine } from "./water-status-line";
+import { WaterTrainingNotes } from "./water-training-notes";
+import { WaterReconciliationPanel } from "./water-reconciliation-panel";
 import { RentForm } from "./forms/rent-form";
 import { LandTaxForm } from "./forms/land-tax-form";
 import { CustomForm } from "./forms/custom-form";
@@ -35,11 +42,18 @@ const ADD_BUTTONS: { category: AdjustmentCategory; icon: typeof Landmark }[] = [
  * — omitted, this renders exactly as it always has for the standalone
  * practice tool at /app/tools/settlement-calculator.
  */
-export function AdjustmentList({ jurisdiction = null }: { jurisdiction?: Jurisdiction | null } = {}) {
+export function AdjustmentList({
+  jurisdiction = null,
+  trainingMode = false,
+}: { jurisdiction?: Jurisdiction | null; trainingMode?: boolean } = {}) {
   const { state, dispatch } = useSettlement();
   const settlementDate = state.matter.settlementDate;
   const results = computeAdjustmentResults(state.adjustments, { settlementDate });
   const resultsById = new Map(results.map((r) => [r.id, r]));
+
+  const waterItems = state.adjustments.filter((i): i is Extract<typeof i, { category: "WATER" }> => i.category === "WATER");
+  const waterReconciliation =
+    waterItems.length > 0 ? reconcileWaterBillTotal(waterItems.map((i) => i.input), resultsById) : null;
 
   return (
     <div className="grid gap-3">
@@ -52,6 +66,8 @@ export function AdjustmentList({ jurisdiction = null }: { jurisdiction?: Jurisdi
           </Button>
         ))}
       </div>
+
+      <WaterReconciliationPanel reconciliation={waterReconciliation} />
 
       {state.adjustments.length === 0 && (
         <p className="text-sm text-muted-foreground print:hidden">No adjustments added yet.</p>
@@ -82,17 +98,47 @@ export function AdjustmentList({ jurisdiction = null }: { jurisdiction?: Jurisdi
             case "WATER": {
               const result = resultsById.get(item.id)!;
               const onPatch = (patch: Partial<WaterAdjustmentInput>) => dispatch({ type: "UPDATE_ADJUSTMENT", id: item.id, patch });
+              const waterLabel =
+                jurisdiction === "QLD"
+                  ? "Queensland Water Adjustment"
+                  : jurisdiction === "NSW"
+                    ? "New South Wales Water Adjustment"
+                    : "Water";
+              const timeline =
+                item.input.waterMode === "FLAT" &&
+                isValidIsoDate(item.input.periodStart) &&
+                isValidIsoDate(item.input.periodEnd) &&
+                isValidIsoDate(settlementDate) &&
+                item.input.amountCents !== null
+                  ? prorateByPeriod({
+                      amountCents: item.input.amountCents,
+                      periodStart: item.input.periodStart as string,
+                      periodEnd: item.input.periodEnd as string,
+                      settlementDate: settlementDate as string,
+                    })
+                  : null;
               return (
                 <AdjustmentCard
                   key={item.id}
-                  title={item.input.label || "Water"}
-                  categoryLabel="Water"
+                  title={item.input.label || waterLabel}
+                  categoryLabel={waterLabel}
                   result={result}
                   onRemove={onRemove}
                   override={item.input.override}
                   onOverrideChange={(override) => onPatch({ override })}
                 >
+                  <WaterStatusLine result={result} />
                   <WaterForm input={item.input} onPatch={onPatch} />
+                  {timeline && (
+                    <WaterTimeline
+                      periodStart={item.input.periodStart as string}
+                      periodEnd={item.input.periodEnd as string}
+                      settlementDate={settlementDate as string}
+                      sellerDays={timeline.sellerDays}
+                      buyerDays={timeline.buyerDays}
+                    />
+                  )}
+                  {trainingMode && <WaterTrainingNotes />}
                 </AdjustmentCard>
               );
             }

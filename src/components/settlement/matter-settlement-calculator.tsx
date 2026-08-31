@@ -1,6 +1,8 @@
 "use client";
 
-import { Calculator } from "lucide-react";
+import { useState } from "react";
+import { Calculator, GraduationCap } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { AdjustmentList } from "./adjustment-list";
 import { CalculationStatusBadge } from "./calculation-status-badge";
 import { CalculationSummary } from "./calculation-summary";
@@ -33,18 +35,31 @@ function MatterSettlementScreen({
   canFinalise: boolean;
   history: SettlementHistoryEntry[];
 }) {
+  const [trainingMode, setTrainingMode] = useState(false);
+
   return (
     <div className="grid gap-4 print:gap-2">
-      <div className="print:hidden">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold">
-          <Calculator className="size-6 text-primary" />
-          Settlement Calculator
-        </h1>
-        <p className="text-muted-foreground">
-          Matter details, adjustments, costs and the buyer/seller settlement statement, with the working shown so
-          every figure can be checked back to its inputs. Review every figure against the contract, current
-          searches and certificates before relying on it.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3 print:hidden">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold">
+            <Calculator className="size-6 text-primary" />
+            Settlement Calculator
+          </h1>
+          <p className="text-muted-foreground">
+            Matter details, adjustments, costs and the buyer/seller settlement statement, with the working shown so
+            every figure can be checked back to its inputs. Review every figure against the contract, current
+            searches and certificates before relying on it.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant={trainingMode ? "default" : "outline"}
+          size="sm"
+          onClick={() => setTrainingMode((v) => !v)}
+        >
+          <GraduationCap className="size-3.5" />
+          Training Mode {trainingMode ? "On" : "Off"}
+        </Button>
       </div>
 
       <MatterSettlementHeader
@@ -64,7 +79,7 @@ function MatterSettlementScreen({
 
       <section className="grid gap-2 print:hidden">
         <h2 className="text-lg font-semibold">Settlement Adjustments</h2>
-        <AdjustmentList jurisdiction={jurisdiction} />
+        <AdjustmentList jurisdiction={jurisdiction} trainingMode={trainingMode} />
       </section>
 
       <section className="grid gap-2 print:hidden">
