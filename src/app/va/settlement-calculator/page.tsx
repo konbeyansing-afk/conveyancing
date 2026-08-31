@@ -65,7 +65,7 @@ export default async function VaSettlementCalculatorPage() {
 
       <div>
         <h2 className="mb-3 text-lg font-semibold">Practice Calculation</h2>
-        <Link href="/app/tools/settlement-calculator">
+        <Link href="/va/settlement-calculator/practice">
           <Card className="transition-colors hover:border-primary/40">
             <CardContent className="flex items-center gap-3 py-4">
               <Calculator className="size-6 text-primary" />
