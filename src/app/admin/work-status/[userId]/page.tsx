@@ -13,6 +13,7 @@ import { JurisdictionBadge } from "@/components/work-status/jurisdiction-badge";
 import { ConveyancingTimeline } from "@/components/work-status/conveyancing-timeline";
 import { ChecklistPanel } from "@/components/work-status/checklist-panel";
 import { MatterHealthPanel } from "@/components/work-status/matter-health-panel";
+import { SettlementAdminSummary, type SettlementAdminSummaryData } from "@/components/settlement/settlement-admin-summary";
 import { WorkItemDetailSheet, type WorkItemDetail } from "@/components/work-status/work-item-detail-sheet";
 import { formatRelativeTime } from "@/lib/format-relative-time";
 import { loadChecklist } from "@/lib/checklist-data";
@@ -115,6 +116,27 @@ export default async function AdminVaWorkStatusDetailPage({
   );
   const checklistByItemId = new Map(checklists);
 
+  const settlementCalcs = await prisma.settlementCalculation.findMany({
+    where: { workItemId: { in: inProgressItems.map((i) => i.id) } },
+    orderBy: { version: "desc" },
+    include: { createdBy: { select: { name: true } }, updatedBy: { select: { name: true } }, finalisedBy: { select: { name: true } } },
+  });
+  const settlementByItemId = new Map<string, SettlementAdminSummaryData>();
+  for (const calc of settlementCalcs) {
+    if (settlementByItemId.has(calc.workItemId)) continue; // most recent version only, per matter
+    settlementByItemId.set(calc.workItemId, {
+      id: calc.id,
+      version: calc.version,
+      status: calc.status,
+      settlementAmountCents: calc.settlementAmountCents,
+      createdByName: calc.createdBy?.name ?? "—",
+      updatedByName: calc.updatedBy?.name ?? null,
+      finalisedByName: calc.finalisedBy?.name ?? null,
+      finalisedAt: calc.finalisedAt,
+      updatedAt: calc.updatedAt,
+    });
+  }
+
   return (
     <div className="grid gap-6">
       <PageHeader
@@ -191,6 +213,13 @@ export default async function AdminVaWorkStatusDetailPage({
                       canEdit={canEditMatterStage}
                     />
                     {checklist.tasks.length > 0 && <MatterHealthPanel issues={checklist.issues} />}
+                    {settlementByItemId.has(item.id) && (
+                      <SettlementAdminSummary
+                        workItemId={item.id}
+                        data={settlementByItemId.get(item.id)!}
+                        canReopen={actorRole === "ADMIN" || actorRole === "TRAINER"}
+                      />
+                    )}
                   </CardContent>
                 </Card>
               );

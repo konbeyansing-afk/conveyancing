@@ -56,6 +56,7 @@ export const traineeNav: NavItem[] = [
 
 export const vaNav: NavItem[] = [
   { title: "Work Status", url: "/va", icon: ClipboardList },
+  { title: "Settlement Calculator", url: "/va/settlement-calculator", icon: Calculator },
 ];
 
 export type NavKey = "admin" | "trainer" | "trainee" | "va";

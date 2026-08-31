@@ -4,7 +4,9 @@ import { Landmark, Droplet, Building2, KeyRound, ShieldAlert, FileEdit, Plus } f
 import { Button } from "@/components/ui/button";
 import { useSettlement } from "@/lib/settlement/store";
 import { computeAdjustmentResults } from "@/lib/settlement/compute";
-import { ADJUSTMENT_CATEGORY_LABEL, type AdjustmentCategory } from "@/lib/settlement/types";
+import { jurisdictionCategoryLabel } from "@/lib/settlement/jurisdiction-labels";
+import type { AdjustmentCategory } from "@/lib/settlement/types";
+import type { Jurisdiction } from "@prisma/client";
 import type { RatesAdjustmentInput } from "@/lib/settlement/adjustments/rates";
 import type { BodyCorporateAdjustmentInput } from "@/lib/settlement/adjustments/bodyCorporate";
 import type { WaterAdjustmentInput } from "@/lib/settlement/adjustments/water";
@@ -28,7 +30,12 @@ const ADD_BUTTONS: { category: AdjustmentCategory; icon: typeof Landmark }[] = [
   { category: "CUSTOM", icon: FileEdit },
 ];
 
-export function AdjustmentList() {
+/**
+ * `jurisdiction` is optional and purely cosmetic (see jurisdiction-labels.ts)
+ * — omitted, this renders exactly as it always has for the standalone
+ * practice tool at /app/tools/settlement-calculator.
+ */
+export function AdjustmentList({ jurisdiction = null }: { jurisdiction?: Jurisdiction | null } = {}) {
   const { state, dispatch } = useSettlement();
   const settlementDate = state.matter.settlementDate;
   const results = computeAdjustmentResults(state.adjustments, { settlementDate });
@@ -41,7 +48,7 @@ export function AdjustmentList() {
           <Button key={category} variant="outline" size="sm" onClick={() => dispatch({ type: "ADD_ADJUSTMENT", category })}>
             <Plus className="size-3.5" />
             <Icon className="size-3.5" />
-            {ADJUSTMENT_CATEGORY_LABEL[category]}
+            {jurisdictionCategoryLabel(jurisdiction, category)}
           </Button>
         ))}
       </div>
@@ -92,11 +99,12 @@ export function AdjustmentList() {
             case "BODY_CORPORATE": {
               const result = resultsById.get(item.id)!;
               const onPatch = (patch: Partial<BodyCorporateAdjustmentInput>) => dispatch({ type: "UPDATE_ADJUSTMENT", id: item.id, patch });
+              const bodyCorporateLabel = jurisdictionCategoryLabel(jurisdiction, "BODY_CORPORATE");
               return (
                 <AdjustmentCard
                   key={item.id}
-                  title={item.input.label || "Body Corporate"}
-                  categoryLabel="Body Corporate"
+                  title={item.input.label || bodyCorporateLabel}
+                  categoryLabel={bodyCorporateLabel}
                   result={result}
                   onRemove={onRemove}
                   override={item.input.override}

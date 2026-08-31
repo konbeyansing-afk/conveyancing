@@ -134,6 +134,9 @@ model User {
   workAdminNotes         WorkAdminNote[]
   checklistTasksAssigned ChecklistTask[]     @relation("ChecklistTaskAssignee")
   checklistTasksCompleted ChecklistTask[]    @relation("ChecklistTaskCompletedBy")
+  settlementCalculationsCreated  SettlementCalculation[] @relation("SettlementCalcCreatedBy")
+  settlementCalculationsUpdated  SettlementCalculation[] @relation("SettlementCalcUpdatedBy")
+  settlementCalculationsFinalised SettlementCalculation[] @relation("SettlementCalcFinalisedBy")
 }
 
 /**
@@ -177,6 +180,7 @@ model WorkItem {
   activity            WorkActivity[]
   adminNotes          WorkAdminNote[]
   checklistTasks      ChecklistTask[]
+  settlementCalculations SettlementCalculation[]
 
   @@index([userId, status])
   @@index([userId, deletedAt])
@@ -259,6 +263,55 @@ model ChecklistTask {
   updatedAt     DateTime            @updatedAt
 
   @@unique([workItemId, taskKey])
+  @@index([workItemId, status])
+}
+
+enum SettlementCalculationStatus {
+  DRAFT
+  FINALISED
+}
+
+/**
+ * One version of a matter's settlement calculation. `state` is the exact
+ * shape src/lib/settlement/store.tsx already works with (matter details,
+ * adjustments, costs) serialised as JSON — the calculation engine itself
+ * (src/lib/settlement/*) is untouched by this model; this only adds
+ * server-side persistence and matter linkage on top of it.
+ *
+ * Versioned, never overwritten: there is at most one DRAFT per matter at a
+ * time (the current working copy, updated in place by Save Draft).
+ * Finalising it stamps finalisedAt/By, locks that row, and immediately
+ * opens the next version as a new DRAFT seeded from it — so finalised
+ * history is permanent and there is always exactly one draft to keep
+ * working from.
+ */
+model SettlementCalculation {
+  id            String                       @id @default(cuid())
+  workItemId    String
+  workItem      WorkItem                     @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  version       Int
+  status        SettlementCalculationStatus  @default(DRAFT)
+  /**
+   * Snapshotted from the matter at creation time, not necessarily identical
+   * to the matter's live jurisdiction if it was later changed — the
+   * calculation itself always reflects whichever state's rules applied
+   * when it was worked on.
+   */
+  jurisdiction  Jurisdiction
+  state         Json
+  /** Snapshot of the computed estimated settlement amount, in cents, for admin listing without recomputing. Null while the state can't yet produce one (e.g. no purchase price). */
+  settlementAmountCents Int?
+  createdById   String?
+  createdBy     User?                        @relation("SettlementCalcCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById   String?
+  updatedBy     User?                        @relation("SettlementCalcUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  finalisedAt   DateTime?
+  finalisedById String?
+  finalisedBy   User?                        @relation("SettlementCalcFinalisedBy", fields: [finalisedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+
+  @@unique([workItemId, version])
   @@index([workItemId, status])
 }
 

@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2, ClipboardList, Hourglass, ListTodo } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, Calculator, CheckCircle2, ClipboardList, Hourglass, ListTodo } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { computeDailySummary, isSameAppDay, pickCurrentItems } from "@/lib/work-status";
@@ -6,6 +7,7 @@ import { isTaskDone } from "@/lib/checklist";
 import { loadChecklist } from "@/lib/checklist-data";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
+import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/admin/stat-card";
 import { CurrentTaskCard } from "@/components/work-status/current-task-card";
 import { ChecklistOverview, type OverviewTaskEntry } from "@/components/work-status/checklist-overview";
@@ -131,6 +133,24 @@ export default async function VaWorkStatusPage() {
       <div>
         <h2 className="mb-3 text-lg font-semibold">My Work</h2>
         <MyWorkTabs items={detailItems} featuredIds={currentIds} canEditMatterStage />
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Tools</h2>
+        <Link href="/va/settlement-calculator" className="block max-w-sm">
+          <Card className="transition-colors hover:border-primary/40">
+            <CardContent className="flex items-start gap-3 py-4">
+              <Calculator className="size-6 shrink-0 text-primary" />
+              <div>
+                <p className="font-medium">Settlement Calculator</p>
+                <p className="text-sm text-muted-foreground">
+                  Calculate settlement adjustments and amounts for one of your matters.
+                </p>
+                <p className="mt-1 text-xs font-medium text-primary">Open Calculator →</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
   );

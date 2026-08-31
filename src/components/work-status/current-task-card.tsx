@@ -1,4 +1,5 @@
-import { CheckCircle2, Hourglass } from "lucide-react";
+import Link from "next/link";
+import { Calculator, CheckCircle2, Hourglass } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { StatusBadge } from "@/components/work-status/status-badge";
 import { PriorityBadge } from "@/components/work-status/priority-badge";
@@ -95,6 +96,20 @@ export function CurrentTaskCard({ item, checklist }: { item: CurrentTaskItem; ch
             <p className="text-xs font-medium text-primary uppercase tracking-wide">Next Required Action</p>
             <p className="font-medium">{nextAction.title}</p>
           </div>
+        )}
+
+        {item.matterStage === "PRE_SETTLEMENT" && (
+          <Link
+            href={`/va/settlement-calculator/${item.id}`}
+            className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm hover:bg-primary/10"
+          >
+            <Calculator className="size-4 shrink-0 text-primary" />
+            <span className="flex-1">
+              <span className="block text-xs font-medium text-primary uppercase tracking-wide">Next Action</span>
+              <span className="font-medium">Settlement Calculation — complete the settlement adjustment calculation</span>
+            </span>
+            <span className="shrink-0 text-xs text-primary">Open Settlement Calculator →</span>
+          </Link>
         )}
 
         {isBlocked && (

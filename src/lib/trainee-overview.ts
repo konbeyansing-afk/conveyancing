@@ -57,19 +57,29 @@ export async function getTraineeOverviews(actor: Actor): Promise<TraineeOverview
   if (trainees.length === 0) return [];
 
   const traineeIds = trainees.map((t) => t.id);
+  // An enrollment's `course` can come back null here despite the schema's
+  // onDelete: Cascade on Enrollment.course — Prisma can load a relation as
+  // a separate follow-up query rather than a single atomic SQL join, so a
+  // concurrent delete of that course between the two round trips leaves
+  // this read seeing the enrollment but not its (just-cascaded-away)
+  // course. Rare, and never a sign the enrollment itself is broken, so
+  // it's skipped rather than treated as an error — the next read of this
+  // page reflects the settled state either way.
   const allLessonIds = [
     ...new Set(
       trainees.flatMap((t) =>
-        t.enrollments.flatMap((e) =>
-          e.course.modules.flatMap((m) => m.lessons.map((l) => l.id)),
-        ),
+        t.enrollments
+          .filter((e) => e.course)
+          .flatMap((e) => e.course.modules.flatMap((m) => m.lessons.map((l) => l.id))),
       ),
     ),
   ];
   const stageIds = [
     ...new Set(
       trainees.flatMap((t) =>
-        t.enrollments.map((e) => e.course.stageId).filter((id): id is string => !!id),
+        t.enrollments
+          .map((e) => e.course?.stageId)
+          .filter((id): id is string => !!id),
       ),
     ),
   ];
@@ -138,14 +148,14 @@ export async function getTraineeOverviews(actor: Actor): Promise<TraineeOverview
 
     const lessonIds = [
       ...new Set(
-        trainee.enrollments.flatMap((e) =>
-          e.course.modules.flatMap((m) => m.lessons.map((l) => l.id)),
-        ),
+        trainee.enrollments
+          .filter((e) => e.course)
+          .flatMap((e) => e.course.modules.flatMap((m) => m.lessons.map((l) => l.id))),
       ),
     ];
     const completedLessons = lessonIds.filter((id) => done.has(id)).length;
     const enrolledStageIds = new Set(
-      trainee.enrollments.map((e) => e.course.stageId).filter((id): id is string => !!id),
+      trainee.enrollments.map((e) => e.course?.stageId).filter((id): id is string => !!id),
     );
 
     // A stage is waiting on a trainer once its lessons are done but the

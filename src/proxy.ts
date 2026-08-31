@@ -49,7 +49,15 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  if (pathname.startsWith("/va") && role !== "VA") {
+  // Admin/Trainer can review (and, per updateMatterStage/settlement
+  // actions, act on) a VA's settlement calculation, the same oversight
+  // carve-out Work Status already gets — every other /va route stays
+  // VA-only.
+  const isSettlementCalculatorPath = pathname.startsWith("/va/settlement-calculator/") && pathname !== "/va/settlement-calculator";
+  if (isSettlementCalculatorPath && role !== "VA" && role !== "ADMIN" && role !== "TRAINER") {
+    return NextResponse.redirect(new URL(roleHome(role), req.url));
+  }
+  if (pathname.startsWith("/va") && !isSettlementCalculatorPath && role !== "VA") {
     return NextResponse.redirect(new URL(roleHome(role), req.url));
   }
 
