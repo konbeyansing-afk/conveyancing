@@ -29,10 +29,23 @@ const LESSON_TYPE_LABEL: Record<LessonType, string> = {
   ASSESSMENT: "Assessment",
 };
 
+// Only the fields this page actually renders. Never pull `content` /
+// `trainerNotes` here — a large program (200+ lessons, loaded once per course
+// and again per stage-course) turns those JSON blobs into a multi-second,
+// multi-megabyte fetch for what is just a list of lesson titles.
+const lessonListSelect = {
+  id: true,
+  title: true,
+  order: true,
+  isPublished: true,
+  estimatedMinutes: true,
+  lessonType: true,
+} as const;
+
 const courseWithModulesInclude = {
   modules: {
     orderBy: { order: "asc" as const },
-    include: { lessons: { orderBy: { order: "asc" as const } } },
+    include: { lessons: { orderBy: { order: "asc" as const }, select: lessonListSelect } },
   },
   quizzes: { select: { id: true, title: true } },
   enrollments: { select: { userId: true } },
@@ -67,7 +80,10 @@ export default async function AdminProgramDetailPage({
     prisma.program.findUnique({
       where: { id: programId },
       include: {
-        courses: { orderBy: { order: "asc" }, include: courseWithModulesInclude },
+        // Direct courses are only rendered for the legacy no-stages layout;
+        // for a stage-based program they are the same rows as stages[].courses,
+        // so keep this side light and let the stage include carry the detail.
+        courses: { orderBy: { order: "asc" }, select: { id: true } },
         stages: {
           orderBy: { order: "asc" },
           include: {
@@ -92,9 +108,20 @@ export default async function AdminProgramDetailPage({
 
   const completedKeys = new Set(completedProgress.map((p) => `${p.userId}:${p.lessonId}`));
   const usesStages = program.stages.length > 0;
+
+  // The legacy no-stages layout renders courses directly; only then do we need
+  // their full module/lesson detail (the main query kept `program.courses` light).
+  const directCourses: CourseWithModules[] = usesStages
+    ? []
+    : await prisma.course.findMany({
+        where: { programId: program.id },
+        orderBy: { order: "asc" },
+        include: courseWithModulesInclude,
+      });
+
   const allCourses: CourseWithModules[] = usesStages
     ? program.stages.flatMap((s) => s.courses)
-    : program.courses;
+    : directCourses;
 
   const courseCount = allCourses.length;
   const moduleCount = allCourses.reduce((sum, c) => sum + c.modules.length, 0);
@@ -464,14 +491,14 @@ export default async function AdminProgramDetailPage({
         </div>
       ) : (
         <div className="grid gap-6">
-          {program.courses.length === 0 ? (
+          {directCourses.length === 0 ? (
             <EmptyState
               icon={BookOpen}
               title="No courses yet"
               description="Start building this program by adding your first course, or add a Stage to use the guided training-journey structure."
             />
           ) : (
-            renderCourses(program.courses)
+            renderCourses(directCourses)
           )}
           <div className="flex flex-wrap gap-2">
             <CreateStageDialog programId={program.id} stageOptions={stageOptions} />
