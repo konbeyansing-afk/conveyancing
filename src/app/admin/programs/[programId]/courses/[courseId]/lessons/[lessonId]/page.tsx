@@ -10,7 +10,11 @@ import {
 import { splitIntoSteps } from "@/lib/tiptap/split-into-steps";
 import { lessonContentToHtml } from "@/components/lesson-content/lesson-content-html";
 import { Breadcrumbs } from "@/components/admin/breadcrumbs";
+import { StatusBadge } from "@/components/admin/status-badge";
 import { DeleteConfirmDialog } from "@/components/admin/delete-confirm-dialog";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { CoverBanner } from "@/lib/cover-theme";
 import { LessonBuilderShell } from "@/components/admin/lesson-builder/lesson-builder-shell";
 import { LessonDetailsForm } from "@/components/admin/lesson-builder/lesson-details-form";
 import { LessonContentStep } from "@/components/admin/lesson-builder/lesson-content-step";
@@ -20,13 +24,29 @@ import { LessonPreviewPanel } from "@/components/admin/lesson-builder/lesson-pre
 import { LessonPublishStep } from "@/components/admin/lesson-builder/lesson-publish-step";
 import { ModuleLessonNav } from "@/components/admin/lesson-builder/module-lesson-nav";
 import { LessonQuickSettingsPanel } from "@/components/admin/lesson-builder/lesson-quick-settings-panel";
-import { Trash2 } from "lucide-react";
+import { ExternalLink, Trash2 } from "lucide-react";
 import type { JSONContent } from "@tiptap/core";
+import type { LessonType, Difficulty } from "@prisma/client";
 
 function hasContent(content: unknown) {
   const doc = content as JSONContent | null;
   return !!doc?.content && doc.content.length > 0;
 }
+
+const LESSON_TYPE_LABEL: Record<LessonType, string> = {
+  STANDARD: "Standard",
+  VIDEO: "Video",
+  READING: "Reading",
+  PRACTICAL: "Practical",
+  QUIZ: "Quiz",
+  ASSESSMENT: "Assessment",
+};
+
+const DIFFICULTY_LABEL: Record<Difficulty, string> = {
+  BEGINNER: "Beginner",
+  INTERMEDIATE: "Intermediate",
+  ADVANCED: "Advanced",
+};
 
 export default async function AdminLessonDetailPage({
   params,
@@ -91,40 +111,89 @@ export default async function AdminLessonDetailPage({
 
   return (
     <div className="grid min-w-0 gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <Breadcrumbs
-          items={[
-            { label: "Programs", href: "/admin/programs" },
-            { label: program.title, href: `/admin/programs/${programId}` },
-            { label: course.title, href: `/admin/programs/${programId}/courses/${courseId}` },
-            { label: lesson.module.title },
-            { label: lesson.title },
-          ]}
-        />
-        <DeleteConfirmDialog
-          trigger={
-            <>
-              <Trash2 className="size-4" /> Delete lesson
-            </>
-          }
-          triggerVariant="ghost"
-          triggerSize="sm"
-          title={`Delete "${lesson.title}"?`}
-          description="This also removes its knowledge check and resources. This cannot be undone."
-          action={deleteLessonAction}
-          confirmLabel="Delete lesson"
-        />
-      </div>
+      <Breadcrumbs
+        items={[
+          { label: "Programs", href: "/admin/programs" },
+          { label: program.title, href: `/admin/programs/${programId}` },
+          { label: course.title, href: `/admin/programs/${programId}/courses/${courseId}` },
+          { label: lesson.module.title },
+          { label: lesson.title },
+        ]}
+      />
+
+      <Card>
+        <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <CoverBanner
+              title={lesson.title || "Lesson"}
+              className="size-12 shrink-0 rounded-xl"
+            />
+            <div className="grid gap-1.5">
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-semibold">{lesson.title || "New Lesson"}</h1>
+                <StatusBadge isPublished={lesson.isPublished} />
+              </div>
+              {lesson.description && (
+                <p className="max-w-2xl text-muted-foreground">{lesson.description}</p>
+              )}
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                <span>
+                  <strong className="text-foreground">{LESSON_TYPE_LABEL[lesson.lessonType]}</strong> Type
+                </span>
+                <span>
+                  <strong className="text-foreground">{DIFFICULTY_LABEL[lesson.difficulty]}</strong> Level
+                </span>
+                {lesson.estimatedMinutes ? (
+                  <span>
+                    <strong className="text-foreground">{lesson.estimatedMinutes}</strong> min
+                  </span>
+                ) : null}
+                <span>
+                  <strong className="text-foreground">{rawSteps.length}</strong>{" "}
+                  {rawSteps.length === 1 ? "Step" : "Steps"}
+                </span>
+                <span>
+                  <strong className="text-foreground">{lesson.quiz ? "Yes" : "No"}</strong> Knowledge check
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={
+                <a
+                  href={`/app/courses/${courseId}/lessons/${lessonId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                />
+              }
+            >
+              <ExternalLink /> Preview
+            </Button>
+            <form action={lesson.isPublished ? unpublishAction : publishAction}>
+              <Button type="submit" variant={lesson.isPublished ? "outline" : "default"}>
+                {lesson.isPublished ? "Unpublish" : "Publish"}
+              </Button>
+            </form>
+            <DeleteConfirmDialog
+              trigger={<Trash2 />}
+              triggerVariant="ghost"
+              title={`Delete "${lesson.title}"?`}
+              description="This also removes its knowledge check and resources. This cannot be undone."
+              action={deleteLessonAction}
+              confirmLabel="Delete lesson"
+            />
+          </div>
+        </div>
+      </Card>
 
       <LessonBuilderShell
-        backHref={`/admin/programs/${programId}/courses/${courseId}`}
-        backLabel={`Back to ${course.title}`}
-        breadcrumb={`${program.title} › ${course.title} › ${lesson.module.title}`}
-        lessonTitle={lesson.title}
         isPublished={lesson.isPublished}
         detailsDone={lesson.title.trim().length > 0}
         contentDone={contentIsWritten}
-        unpublishAction={unpublishAction}
         detailsSlot={
           <LessonDetailsForm
             programId={programId}
