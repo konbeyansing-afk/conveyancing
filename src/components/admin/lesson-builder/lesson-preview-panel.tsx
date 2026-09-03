@@ -38,6 +38,7 @@ export function LessonPreviewPanel({
         quizHref={quizHref}
         isDraftPreview={!isPublished}
         resources={resources}
+        embedded
       />
     </div>
   );

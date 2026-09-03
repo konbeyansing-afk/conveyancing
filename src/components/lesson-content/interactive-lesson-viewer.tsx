@@ -19,6 +19,7 @@ export function InteractiveLessonViewer({
   quizHref,
   isDraftPreview,
   resources,
+  embedded,
 }: {
   steps: Step[];
   lessonTitle: string;
@@ -33,6 +34,9 @@ export function InteractiveLessonViewer({
   quizHref?: string;
   isDraftPreview?: boolean;
   resources?: Resource[];
+  /** Rendered inside the Lesson Builder preview step: stays in its container
+   *  instead of breaking out full-bleed, and drops the redundant back-link. */
+  embedded?: boolean;
 }) {
   const total = steps.length;
   const [step, setStep] = useState(0);
@@ -129,7 +133,12 @@ export function InteractiveLessonViewer({
   const progressCount = showComplete ? total : step;
 
   return (
-    <div className="matter-file-theme -m-4 min-h-[calc(100vh-3.5rem)] px-4 py-6 sm:px-8 sm:py-10">
+    <div
+      className={`matter-file-theme px-4 py-6 sm:px-8 sm:py-10 ${
+        embedded ? "rounded-xl border" : "-m-4 min-h-[calc(100vh-3.5rem)]"
+      }`}
+      style={embedded ? { borderColor: "var(--mf-line)" } : undefined}
+    >
       <div className="mx-auto max-w-5xl">
         {isDraftPreview && (
           <div
@@ -140,16 +149,21 @@ export function InteractiveLessonViewer({
             You&apos;re previewing this as staff — it&apos;s not published, so trainees can&apos;t see it yet.
           </div>
         )}
-        <Link
-          href={backHref}
-          className="mf-mono inline-flex items-center gap-1.5 text-xs uppercase tracking-wide"
-          style={{ color: "var(--mf-ink-soft)" }}
-        >
-          <ArrowLeft className="size-3.5" />
-          {backLabel}
-        </Link>
+        {!embedded && (
+          <Link
+            href={backHref}
+            className="mf-mono inline-flex items-center gap-1.5 text-xs uppercase tracking-wide"
+            style={{ color: "var(--mf-ink-soft)" }}
+          >
+            <ArrowLeft className="size-3.5" />
+            {backLabel}
+          </Link>
+        )}
 
-        <p className="mf-mono mt-3 text-xs uppercase tracking-wide" style={{ color: "var(--mf-brass-dark)" }}>
+        <p
+          className={`mf-mono text-xs uppercase tracking-wide ${embedded ? "" : "mt-3"}`}
+          style={{ color: "var(--mf-brass-dark)" }}
+        >
           {moduleTitle}
         </p>
         <h1 className="mf-display text-3xl font-medium sm:text-4xl">{lessonTitle}</h1>

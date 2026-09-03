@@ -66,9 +66,19 @@ export function LessonBuilderShell({
     publish: publishSlot,
   };
 
+  const isPreview = step === "preview";
+
   return (
     <div className="grid min-w-0 gap-6">
-      <div className="sticky top-14 z-10 -mx-4 -mt-4 min-w-0 border-b bg-background/95 px-4 pt-4 pb-3 backdrop-blur-sm">
+      {/* Sticky while editing, but static in Preview so it scrolls away instead
+          of covering the lesson content the way a trainee would never see it. */}
+      <div
+        className={
+          isPreview
+            ? "-mx-4 -mt-4 min-w-0 border-b bg-background px-4 pt-4 pb-3"
+            : "sticky top-14 z-20 -mx-4 -mt-4 min-w-0 border-b bg-background/95 px-4 pt-4 pb-3 backdrop-blur-sm"
+        }
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <Link
