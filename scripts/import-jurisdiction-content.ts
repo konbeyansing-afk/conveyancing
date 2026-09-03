@@ -207,6 +207,44 @@ const UK: JurisdictionSpec = {
   ],
 };
 
+const QLD: JurisdictionSpec = {
+  code: "QLD",
+  programSlug: "qld-conveyancing-va-academy",
+  programTitle: "QLD Conveyancing VA Academy",
+  programDescription:
+    "Virtual Assistant training for Queensland conveyancing practices. Administrative and operational support only — not legal advice.",
+  dir: "qld",
+  stages: [
+    "Foundation",
+    "Conveyancing Fundamentals",
+    "QLD Process",
+    "Contracts & Forms",
+    "Searches",
+    "Pre-Settlement",
+    "Settlement",
+    "Post-Settlement",
+    "Software & Systems",
+    "Practical Simulations",
+    "Final Assessment",
+  ],
+  phases: [
+    { file: "00-Course-Overview-and-Roadmap", phaseTitle: "Course Overview & Roadmap", stage: "Foundation", parse: "heading" },
+    { file: "01-Phase1-Professional-Foundation", phaseTitle: "Professional Foundation", stage: "Foundation", parse: "heading" },
+    { file: "13-Official-Reference-Sources", phaseTitle: "Official Reference Sources", stage: "Foundation", parse: "heading" },
+    { file: "02-Phase2-Fundamentals-and-Glossary", phaseTitle: "Fundamentals & Glossary", stage: "Conveyancing Fundamentals", parse: "heading" },
+    { file: "12-Glossary", phaseTitle: "Glossary", stage: "Conveyancing Fundamentals", parse: "heading" },
+    { file: "03-Phase3-Queensland-Process", phaseTitle: "Queensland Process", stage: "QLD Process", parse: "heading" },
+    { file: "04-Phase4-Software-Systems", phaseTitle: "Software & Systems", stage: "Software & Systems", parse: "heading" },
+    { file: "06-Phase6-Communication", phaseTitle: "Communication", stage: "Software & Systems", parse: "heading" },
+    { file: "05-Phase5-Practical-Exercises", phaseTitle: "Practical Exercises", stage: "Practical Simulations", parse: "heading" },
+    { file: "08-Phase8-Common-Errors", phaseTitle: "Common Errors", stage: "Practical Simulations", parse: "heading" },
+    { file: "09-Phase9-Scenarios", phaseTitle: "Scenarios", stage: "Practical Simulations", parse: "heading" },
+    { file: "07-Phase7-Quality-Control", phaseTitle: "Quality Control", stage: "Final Assessment", parse: "heading" },
+    { file: "10-Phase10-Final-Assessment", phaseTitle: "Final Assessment", stage: "Final Assessment", parse: "heading" },
+    { file: "11-Phase11-Competency-Matrix", phaseTitle: "Competency Matrix", stage: "Final Assessment", parse: "heading" },
+  ],
+};
+
 /* ------------------------------------------------------ parsing utilities */
 
 const NSW_SECTIONS = new Set(
@@ -335,13 +373,17 @@ function parseHeadingFile(html: string, defaultPhaseTitle: string, forcePhaseTit
   if (levels.length === 0) {
     return [{ phaseTitle: defaultPhaseTitle, stage: "", lessons: wholeAsOneLesson(nodes, defaultPhaseTitle) }];
   }
-  const phaseLevel = levels[0];
+  const countAt = (l: number) => headings.filter((h) => Number(h.tagName[1]) === l).length;
+  // When the phase title comes from config (forcePhaseTitle) some source files
+  // have no phase heading at all — the shallowest heading *is* the lesson tier
+  // (it repeats). Others still open with a single phase <h1>. Distinguish by
+  // whether the shallowest level repeats.
+  const phaseLevel = forcePhaseTitle && countAt(levels[0]) >= 2 ? 0 : levels[0];
   // Lesson level = the shallowest heading level deeper than the phase heading
   // that actually repeats (a real lesson tier always occurs ≥2 times). This
   // ignores a lone trailing deep heading like "Assessment Reference" and also
   // ignores the per-lesson section headings one level further down.
   const deeper = levels.filter((l) => l > phaseLevel);
-  const countAt = (l: number) => headings.filter((h) => Number(h.tagName[1]) === l).length;
   const lessonLevel =
     deeper.find((l) => countAt(l) >= 2) ?? deeper[0] ?? phaseLevel + 1;
 
@@ -365,8 +407,8 @@ function parseHeadingFile(html: string, defaultPhaseTitle: string, forcePhaseTit
     const tag = el.tagName;
     const lvl = /^H[1-6]$/.test(tag) ? Number(tag[1]) : 0;
     const t = textOf(el);
-    if (lvl && lvl <= phaseLevel) {
-      if (/^table of contents$/i.test(t)) continue;
+    if (/^table of contents$/i.test(t)) continue;
+    if (lvl && phaseLevel > 0 && lvl <= phaseLevel) {
       flushPhase();
       curPhase = { phaseTitle: forcePhaseTitle ? defaultPhaseTitle : cleanTitle(t) || t, stage: "", lessons: [] };
       continue;
@@ -686,7 +728,10 @@ async function applyJurisdiction(prisma: PrismaClient, spec: JurisdictionSpec, s
 /* ------------------------------------------------------------------- main */
 
 async function main() {
-  const specs = [NSW, VIC, UK];
+  // --only=qld,nsw  limits which jurisdictions are (re)built this run.
+  const onlyArg = process.argv.find((a) => a.startsWith("--only="))?.slice("--only=".length);
+  const only = onlyArg ? new Set(onlyArg.toUpperCase().split(",")) : null;
+  const specs = [QLD, NSW, VIC, UK].filter((s) => !only || only.has(s.code));
   const built = specs.map((s) => {
     console.log(`\nParsing ${s.code} …`);
     return { spec: s, stages: buildJurisdiction(s) };
