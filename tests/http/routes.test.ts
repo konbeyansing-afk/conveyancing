@@ -418,6 +418,20 @@ describeIfUp()("Admin navigation actually goes somewhere", () => {
     return [...new Set(found)];
   }
 
+  /**
+   * The crawl is a structural regression guard (course.programId vs
+   * stage.programId), not an exhaustive link check — a broken mapping breaks
+   * *every* course/lesson in the program, not one deep one. With the imported
+   * curricula a single program can carry 250+ lesson links; crawling all of
+   * them against the dev server takes tens of minutes, so sample a bounded
+   * set: every program/course link, plus the first few lessons.
+   */
+  function sampleLinks(links: string[], maxLessons = 8): string[] {
+    const lessons = links.filter((l) => l.includes("/lessons/"));
+    const rest = links.filter((l) => !l.includes("/lessons/"));
+    return [...rest, ...lessons.slice(0, maxLessons)];
+  }
+
   /** Fetches links a few at a time — serial is too slow, all at once floods the dev server. */
   async function findBroken(links: string[]): Promise<string[]> {
     const broken: string[] = [];
@@ -459,27 +473,42 @@ describeIfUp()("Admin navigation actually goes somewhere", () => {
     expect(await findBroken(stableLinks)).toEqual([]);
   });
 
-  it("opens every course and lesson linked from a program page", { timeout: 300_000 }, async () => {
+  it("opens the courses and lessons linked from a program page", { timeout: 180_000 }, async () => {
     // Regression: the course and lesson pages rejected the request unless
     // `course.programId` matched the URL, but the program page builds its
-    // links from the stage's program. Where those disagreed — which is every
-    // course in the main journey program — the admin could not open any of
-    // its courses or lessons at all.
-    const programs = await prisma.program.findMany({
+    // links from the stage's program. Where those disagreed — every course in
+    // the journey program, whose courses are owned by shell programs — the
+    // admin could not open any of its courses or lessons at all.
+    //
+    // A broken mapping breaks *every* course/lesson in the program, so this
+    // samples rather than crawling all of a now-large library: the programs
+    // that actually exhibit the programId/stage-programId split, plus one
+    // that doesn't, and only the first few lesson links of each.
+    const splitProgramIds = new Set(
+      (
+        await prisma.course.findMany({
+          where: { stage: { isNot: null }, NOT: { title: { startsWith: "ZZ-AUDIT" } } },
+          select: { programId: true, stage: { select: { programId: true } } },
+        })
+      )
+        .filter((c) => c.stage && c.stage.programId !== c.programId)
+        .map((c) => c.stage!.programId),
+    );
+    const cleanProgram = await prisma.program.findFirst({
       where: {
+        id: { notIn: [...splitProgramIds] },
         stages: { some: { courses: { some: {} } } },
-        // Audit fixtures come and go while other suites run; this test is
-        // about the real content library.
         NOT: { title: { startsWith: "ZZ-AUDIT" } },
       },
       select: { id: true },
     });
-    expect(programs.length).toBeGreaterThan(0);
+    const programIds = [...splitProgramIds, ...(cleanProgram ? [cleanProgram.id] : [])];
+    expect(programIds.length).toBeGreaterThan(0);
 
     const broken: string[] = [];
-    for (const program of programs) {
-      const html = await (await get(`/admin/programs/${program.id}`, adminCookie)).text();
-      broken.push(...(await findBroken(adminLinks(html))));
+    for (const programId of programIds) {
+      const html = await (await get(`/admin/programs/${programId}`, adminCookie)).text();
+      broken.push(...(await findBroken(sampleLinks(adminLinks(html), 5))));
     }
     expect(broken).toEqual([]);
   });
