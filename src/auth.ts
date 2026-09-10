@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import type { Role } from "@prisma/client";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // The app is served from more than just localhost — a LAN address, a
+  // tunnel hostname, or a deployed domain — so trust the forwarded host
+  // rather than rejecting the sign-in callback as an untrusted origin.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
   providers: [
