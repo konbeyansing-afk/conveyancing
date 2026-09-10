@@ -58,11 +58,15 @@ function revalidateSettlementPaths(workItemId: string, vaUserId: string) {
  * Loads the matter's current draft, creating version 1 (seeded from the
  * matter) if this is the first time its calculator has been opened. Also
  * returns every past version, most recent first, for the history list.
- * Not itself an action a client calls — used by the page (a Server
- * Component) and by the actions below.
+ * Called by the page (a Server Component) and by the actions below — but
+ * because this module is "use server", it is also individually invokable,
+ * so it re-checks matter access itself (a VA only their own; Admin/Trainer
+ * any) rather than trusting the caller to have done so.
  */
 export async function loadOrCreateSettlementDraft(workItemId: string) {
-  const item = await prisma.workItem.findUniqueOrThrow({ where: { id: workItemId } });
+  const access = await requireMatterAccess(workItemId);
+  if (!access.ok) throw new Error(access.error);
+  const { item } = access;
 
   let draft = await prisma.settlementCalculation.findFirst({
     where: { workItemId, status: "DRAFT" },

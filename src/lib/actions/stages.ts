@@ -107,7 +107,10 @@ export async function moveStageOrder(programId: string, stageId: string, directi
 }
 
 export async function approveStageForTrainee(programId: string, stageId: string, formData: FormData) {
-  const actor = await requireRole("ADMIN", "TRAINER");
+  // Admin-only: this pair lives on the admin program page. A trainer signs
+  // off stages through src/lib/actions/trainer.ts, which additionally scopes
+  // the action to the trainer's own assigned trainees.
+  const actor = await requireRole("ADMIN");
 
   const userId = (formData.get("userId") as string)?.trim();
   if (!userId) return;
@@ -127,7 +130,9 @@ export async function approveStageForTrainee(programId: string, stageId: string,
 }
 
 export async function revokeStageApproval(programId: string, approvalId: string, _formData: FormData) {
-  await requireRole("ADMIN", "TRAINER");
+  // Admin-only — see approveStageForTrainee. Trainers use trainer.ts's
+  // withdrawStageApproval, which is scoped to their assigned trainees.
+  await requireRole("ADMIN");
   const approval = await prisma.stageApproval.delete({ where: { id: approvalId } });
   // Withdrawing sign-off can un-complete the stage, so the milestone goes too.
   await syncCompletionForStage(approval.stageId, approval.userId);

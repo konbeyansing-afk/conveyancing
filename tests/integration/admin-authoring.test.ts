@@ -58,11 +58,14 @@ function form(fields: Record<string, string>) {
 
 let admin: Awaited<ReturnType<typeof createUser>>;
 let trainee: Awaited<ReturnType<typeof createUser>>;
+let trainerUser: Awaited<ReturnType<typeof createUser>>;
 
 const asAdmin = () =>
   (session.user = { id: admin.id, name: admin.name, email: admin.email, role: "ADMIN" });
 const asTrainee = () =>
   (session.user = { id: trainee.id, name: trainee.name, email: trainee.email, role: "TRAINEE" });
+const asTrainer = () =>
+  (session.user = { id: trainerUser.id, name: trainerUser.name, email: trainerUser.email, role: "TRAINER" });
 const asNobody = () => (session.user = null);
 
 /* Ids built up across the ordered authoring walkthrough. */
@@ -76,6 +79,7 @@ beforeAll(async () => {
   await assertDatabaseReachable();
   admin = await createUser("ADMIN", "authoring");
   trainee = await createUser("TRAINEE", "authoring");
+  trainerUser = await createUser("TRAINER", "authoring");
 });
 
 afterAll(async () => {
@@ -375,6 +379,23 @@ describe("Authorisation is enforced at the action level", () => {
     expect(lesson).not.toBeNull();
     expect(lesson!.isPublished).toBe(true);
     expect(JSON.stringify(lesson!.content)).toContain("Body copy for step one.");
+  });
+
+  // The admin program page's stage sign-off actions are admin-only; a trainer
+  // signs stages off through trainer.ts, which additionally scopes to their
+  // own assigned trainees.
+  it("refuses approveStageForTrainee for a trainer", async () => {
+    asTrainer();
+    await expect(
+      stages.approveStageForTrainee(programId, stageId, form({ userId: trainee.id })),
+    ).rejects.toThrow(/unauthorized/i);
+  });
+
+  it("refuses revokeStageApproval for a trainer", async () => {
+    asTrainer();
+    await expect(
+      stages.revokeStageApproval(programId, "some-approval-id", new FormData()),
+    ).rejects.toThrow(/unauthorized/i);
   });
 });
 

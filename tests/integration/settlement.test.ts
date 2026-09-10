@@ -5,7 +5,7 @@
  * reopening, resetting, and permissions.
  */
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { assertDatabaseReachable, cleanup, createUser } from "./helpers";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/settlement/money";
@@ -45,6 +45,13 @@ afterAll(async () => {
   await cleanup();
 });
 
+// loadOrCreateSettlementDraft now re-checks matter access itself, so its use
+// as a plain setup step needs a session. Default to admin (may load any
+// matter's draft); tests that care about a specific role still call as*().
+beforeEach(() => {
+  session.user = { id: admin.id, name: admin.name, email: admin.email, role: "ADMIN" };
+});
+
 function withReadyMatter(state: SettlementState, overrides: Partial<SettlementState["matter"]> = {}): SettlementState {
   return {
     ...state,
@@ -80,6 +87,26 @@ describe("loadOrCreateSettlementDraft", () => {
     const second = await settlement.loadOrCreateSettlementDraft(item.id);
     expect(second.draft.id).toBe(first.draft.id);
     expect(second.history).toHaveLength(1);
+  });
+
+  it("refuses a VA opening another VA's matter — no draft is created", async () => {
+    const item = await prisma.workItem.create({
+      data: { userId: vaOne.id, title: "ZZ-AUDIT Cross-VA Load", jurisdiction: "QLD", matterType: "PURCHASE", status: "IN_PROGRESS", priority: "NORMAL" },
+    });
+    asVaTwo();
+    await expect(settlement.loadOrCreateSettlementDraft(item.id)).rejects.toThrow(/your own matter/i);
+    const rows = await prisma.settlementCalculation.count({ where: { workItemId: item.id } });
+    expect(rows).toBe(0);
+  });
+
+  it("refuses an unauthenticated caller", async () => {
+    const item = await prisma.workItem.create({
+      data: { userId: vaOne.id, title: "ZZ-AUDIT Anon Load", jurisdiction: "QLD", matterType: "SALE", status: "IN_PROGRESS", priority: "NORMAL" },
+    });
+    session.user = null;
+    await expect(settlement.loadOrCreateSettlementDraft(item.id)).rejects.toThrow();
+    const rows = await prisma.settlementCalculation.count({ where: { workItemId: item.id } });
+    expect(rows).toBe(0);
   });
 });
 

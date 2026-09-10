@@ -29,6 +29,12 @@ export type ChecklistActionState =
  * it shipped), simply gets no rows.
  */
 export async function ensureChecklistForWorkItem(workItemId: string): Promise<void> {
+  // "use server" export, so individually invokable — require a signed-in
+  // staff/VA session. It only ever materialises the deterministic
+  // Jurisdiction+MatterType template rows and returns nothing, so it does
+  // not carry a per-matter ownership check.
+  await requireRole("ADMIN", "TRAINER", "VA");
+
   const item = await prisma.workItem.findUnique({
     where: { id: workItemId },
     select: { jurisdiction: true, matterType: true, deletedAt: true },
