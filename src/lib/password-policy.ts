@@ -10,6 +10,14 @@ export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 200;
 
 /**
+ * A temporary password an admin sets when creating an account is a throwaway
+ * credential — the holder must replace it on first login (mustChangePassword),
+ * so it only needs to be non-trivial, not survive the full policy. The real
+ * rules still apply the moment the user chooses their own.
+ */
+export const TEMPORARY_PASSWORD_MIN_LENGTH = 8;
+
+/**
  * Passwords this codebase has shipped or documented at some point, plus the
  * usual suspects. Rejected outright regardless of how well they otherwise
  * score — the seeded default in particular must never survive a change.
@@ -103,6 +111,25 @@ export function validatePassword(
     if (namePart) return { ok: false, error: "Password cannot contain your name." };
   }
 
+  return { ok: true };
+}
+
+/**
+ * Lighter check for an admin-issued temporary password: a length floor and no
+ * wrapping whitespace, nothing more. No banned-list or name/email checks —
+ * the account can't keep this password past first login anyway.
+ */
+export function validateTemporaryPassword(password: string): PasswordCheck {
+  if (!password) return { ok: false, error: "Enter a temporary password." };
+  if (password.length < TEMPORARY_PASSWORD_MIN_LENGTH) {
+    return { ok: false, error: `Temporary password must be at least ${TEMPORARY_PASSWORD_MIN_LENGTH} characters.` };
+  }
+  if (password.length > PASSWORD_MAX_LENGTH) {
+    return { ok: false, error: `Password must be ${PASSWORD_MAX_LENGTH} characters or fewer.` };
+  }
+  if (password.trim() !== password) {
+    return { ok: false, error: "Password cannot start or end with a space." };
+  }
   return { ok: true };
 }
 

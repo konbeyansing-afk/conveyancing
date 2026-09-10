@@ -345,18 +345,33 @@ describe("Admin setting a specific password", () => {
 });
 
 describe("Creating a user", () => {
-  it("applies the password policy", async () => {
+  it("enforces a minimum length on the temporary password", async () => {
     asUser(admin, "ADMIN");
     const result = await createUserAction(
       null,
       form({
-        name: "ZZ-AUDIT Weak",
-        email: `weak.${Date.now()}@example.test`,
-        password: "password",
+        name: "ZZ-AUDIT Short",
+        email: `short.${Date.now()}@example.test`,
+        password: "short",
         role: "TRAINEE",
       }),
     );
-    expect(result?.error).toBeTruthy();
+    expect(result?.error).toMatch(/at least/i);
+  });
+
+  it("does not apply the full guessability policy to the temporary password", async () => {
+    // A temporary password only has to be non-trivial — the holder is forced
+    // to replace it on first login, so the banned-list / name checks that
+    // guard a real password don't apply here.
+    asUser(admin, "ADMIN");
+    const email = `simple.${Date.now()}@example.test`;
+    const result = await createUserAction(
+      null,
+      form({ name: "ZZ-AUDIT Simple", email, password: "password", role: "TRAINEE" }),
+    );
+    expect(result).toBeNull();
+    const created = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (created) await prisma.user.delete({ where: { id: created.id } });
   });
 
   it("flags a new account so the holder must choose their own password", async () => {

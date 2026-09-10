@@ -9,7 +9,9 @@ import {
   passwordsMatch,
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
+  TEMPORARY_PASSWORD_MIN_LENGTH,
   validatePassword,
+  validateTemporaryPassword,
 } from "@/lib/password-policy";
 
 const GOOD = "Kestrel-Parade-8842";
@@ -100,6 +102,42 @@ describe("validatePassword — rejects passwords built from the user's own detai
     const result = validatePassword(GOOD, { currentPassword: GOOD });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/different/i);
+  });
+});
+
+describe("validateTemporaryPassword", () => {
+  it("accepts a simple password the full policy would reject", () => {
+    // "password" is on the banned list for a real password, but a temporary
+    // one only needs to clear the length floor.
+    expect(validateTemporaryPassword("password").ok).toBe(true);
+  });
+
+  it("accepts exactly the minimum length", () => {
+    expect(validateTemporaryPassword("a".repeat(TEMPORARY_PASSWORD_MIN_LENGTH)).ok).toBe(true);
+  });
+
+  it("rejects anything shorter than the minimum", () => {
+    const result = validateTemporaryPassword("a".repeat(TEMPORARY_PASSWORD_MIN_LENGTH - 1));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/at least/i);
+  });
+
+  it("rejects an empty password", () => {
+    expect(validateTemporaryPassword("").ok).toBe(false);
+  });
+
+  it("rejects wrapping whitespace", () => {
+    expect(validateTemporaryPassword("  spaced out  ").ok).toBe(false);
+  });
+
+  it("rejects something over the maximum length", () => {
+    expect(validateTemporaryPassword("a".repeat(PASSWORD_MAX_LENGTH + 1)).ok).toBe(false);
+  });
+
+  it("does not apply the name/email checks the real policy does", () => {
+    // No context argument at all — a temporary password can't be built from
+    // details it never sees.
+    expect(validateTemporaryPassword("shanecapati").ok).toBe(true);
   });
 });
 

@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/require-role";
-import { generatePassword, passwordsMatch, validatePassword } from "@/lib/password-policy";
+import {
+  generatePassword,
+  passwordsMatch,
+  validatePassword,
+  validateTemporaryPassword,
+} from "@/lib/password-policy";
 import type { Role } from "@prisma/client";
 
 const VALID_ROLES: Role[] = ["ADMIN", "TRAINER", "TRAINEE", "VA"];
@@ -25,7 +30,9 @@ export async function createUser(
   if (!name || !email || !password) return { error: "All fields are required." };
   if (!VALID_ROLES.includes(role)) return { error: "Invalid role." };
 
-  const policy = validatePassword(password, { name, email });
+  // A temporary password the admin relays and the holder must replace on
+  // first login — only needs a basic floor, not the full policy.
+  const policy = validateTemporaryPassword(password);
   if (!policy.ok) return { error: policy.error };
 
   const existing = await prisma.user.findUnique({ where: { email } });
