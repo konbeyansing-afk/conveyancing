@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Award, BookOpen, CheckCircle2, Lock } from "lucide-react";
+import { Award, BookOpen, CheckCircle2, ClipboardCheck, Lock } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { findScopedTrainee } from "@/lib/trainer-scope";
@@ -38,7 +39,7 @@ export default async function TrainerTraineeDetailPage({
   const program = await getPrimaryProgramForUser(trainee.id);
   const stages = program ? await getJourneyForUser(program.id, trainee.id) : [];
 
-  const [approvals, attempts, notes, certificates] = await Promise.all([
+  const [approvals, attempts, notes, certificates, awaitingLessonSignOff] = await Promise.all([
     prisma.stageApproval.findMany({
       where: { userId: trainee.id },
       select: {
@@ -62,6 +63,14 @@ export default async function TrainerTraineeDetailPage({
     prisma.certificate.findMany({
       where: { userId: trainee.id },
       orderBy: { completedAt: "desc" },
+    }),
+    // Lesson-level sign-offs (distinct from the stage-level ones above): the
+    // trainee has already attested, and it's waiting on this trainer's own
+    // independent review — see src/lib/actions/lesson-signoff.ts.
+    prisma.lessonSignOff.findMany({
+      where: { userId: trainee.id, traineeSignedAt: { not: null }, trainerResult: null },
+      orderBy: { traineeSignedAt: "desc" },
+      include: { lesson: { select: { id: true, title: true, module: { select: { course: { select: { id: true, title: true } } } } } } },
     }),
   ]);
 
@@ -158,6 +167,32 @@ export default async function TrainerTraineeDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {awaitingLessonSignOff.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Lessons awaiting your sign-off</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            {awaitingLessonSignOff.map((s) => (
+              <Link
+                key={s.id}
+                href={`/trainer/trainees/${trainee.id}/courses/${s.lesson.module.course.id}/lessons/${s.lesson.id}`}
+                className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 hover:bg-muted/40"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{s.lesson.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{s.lesson.module.course.title}</p>
+                </div>
+                <Badge variant="destructive" className="shrink-0">
+                  <ClipboardCheck className="size-3.5" />
+                  Needs review
+                </Badge>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

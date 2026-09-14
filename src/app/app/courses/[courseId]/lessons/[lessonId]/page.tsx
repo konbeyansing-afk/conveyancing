@@ -5,6 +5,7 @@ import { lessonContentToHtml } from "@/components/lesson-content/lesson-content-
 import { InteractiveLessonViewer } from "@/components/lesson-content/interactive-lesson-viewer";
 import { splitIntoSteps } from "@/lib/tiptap/split-into-steps";
 import { markLessonComplete } from "@/lib/actions/progress";
+import { submitTraineeSignOff } from "@/lib/actions/lesson-signoff";
 import { canPreviewUnpublished } from "@/lib/can-preview-unpublished";
 import { isEnrolledInCourse } from "@/lib/is-enrolled-in-course";
 import { isStageUnlockedForUser, isCoursePublished } from "@/lib/stage-access";
@@ -48,6 +49,14 @@ export default async function TraineeLessonPage({
     : [{ title: lesson.title, html: "<p>This lesson doesn&apos;t have content yet.</p>" }];
 
   const completeAction = markLessonComplete.bind(null, lesson.id);
+  const signOffAction = submitTraineeSignOff.bind(null, lesson.id);
+
+  const signOffRow = lesson.requiresSignOff && userId
+    ? await prisma.lessonSignOff.findUnique({
+        where: { lessonId_userId: { lessonId: lesson.id, userId } },
+        select: { traineeName: true, traineeSignedAt: true, trainerName: true, trainerResult: true, trainerSignedAt: true },
+      })
+    : null;
 
   return (
     <div className={matterFontVariables}>
@@ -61,6 +70,19 @@ export default async function TraineeLessonPage({
         quizHref={lesson.quiz ? `/app/courses/${course.id}/lessons/${lesson.id}/quiz` : undefined}
         isDraftPreview={!isPublished}
         resources={lesson.attachments}
+        requiresSignOff={lesson.requiresSignOff}
+        signOff={
+          signOffRow
+            ? {
+                traineeName: signOffRow.traineeName,
+                traineeSignedAt: signOffRow.traineeSignedAt?.toISOString() ?? null,
+                trainerName: signOffRow.trainerName,
+                trainerResult: signOffRow.trainerResult,
+                trainerSignedAt: signOffRow.trainerSignedAt?.toISOString() ?? null,
+              }
+            : null
+        }
+        onSubmitSignOff={signOffAction}
       />
     </div>
   );

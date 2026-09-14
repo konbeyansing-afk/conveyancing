@@ -137,6 +137,8 @@ model User {
   settlementCalculationsCreated  SettlementCalculation[] @relation("SettlementCalcCreatedBy")
   settlementCalculationsUpdated  SettlementCalculation[] @relation("SettlementCalcUpdatedBy")
   settlementCalculationsFinalised SettlementCalculation[] @relation("SettlementCalcFinalisedBy")
+  lessonSignOffs         LessonSignOff[]     @relation("LessonSignOffTrainee")
+  lessonSignOffsGranted  LessonSignOff[]     @relation("LessonSignOffTrainer")
 }
 
 /**
@@ -419,6 +421,12 @@ model Lesson {
   difficulty            Difficulty            @default(BEGINNER)
   estimatedMinutes      Int?
   completionRequirement CompletionRequirement @default(VIEW_ALL)
+  /**
+   * Separate from and combinable with completionRequirement — a lesson can
+   * require both passing its quiz AND a trainee sign-off before it counts as
+   * complete. See LessonSignOff.
+   */
+  requiresSignOff       Boolean               @default(false)
   isPublished           Boolean               @default(false)
   order                 Int                   @default(0)
   content               Json?
@@ -429,6 +437,7 @@ model Lesson {
   attachments           LessonAttachment[]
   quiz                  Quiz?
   progress              LessonProgress[]
+  signOffs              LessonSignOff[]
 
   @@unique([moduleId, slug])
 }
@@ -451,6 +460,40 @@ enum Difficulty {
 enum CompletionRequirement {
   VIEW_ALL
   PASS_QUIZ
+}
+
+enum SignOffResult {
+  PASS
+  REFER
+}
+
+/**
+ * A trainee's self-attestation on a lesson that requires one
+ * (Lesson.requiresSignOff), plus a Trainer/Admin's independent review of it
+ * — one row per (lesson, trainee), with the two halves written by different
+ * actors via different actions (see src/lib/actions/lesson-signoff.ts). The
+ * trainer half is oversight recorded after the fact: it never gates or
+ * un-completes the trainee's own lesson completion, which depends only on
+ * traineeSignedAt (and the lesson's own quiz gate, if any).
+ */
+model LessonSignOff {
+  id              String         @id @default(cuid())
+  lessonId        String
+  lesson          Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User           @relation("LessonSignOffTrainee", fields: [userId], references: [id], onDelete: Cascade)
+  traineeName     String?
+  traineeSignedAt DateTime?
+  trainerName     String?
+  trainerResult   SignOffResult?
+  trainerById     String?
+  trainerBy       User?          @relation("LessonSignOffTrainer", fields: [trainerById], references: [id], onDelete: SetNull)
+  trainerNotes    String?
+  trainerSignedAt DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([lessonId, userId])
 }
 
 model LessonAttachment {

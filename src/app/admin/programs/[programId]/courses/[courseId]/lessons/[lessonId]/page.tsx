@@ -235,6 +235,7 @@ export default async function AdminLessonDetailPage({
                 difficulty={lesson.difficulty}
                 estimatedMinutes={lesson.estimatedMinutes}
                 completionRequirement={lesson.completionRequirement}
+                requiresSignOff={lesson.requiresSignOff}
                 hasQuiz={!!lesson.quiz}
                 isPublished={lesson.isPublished}
                 readiness={readiness}

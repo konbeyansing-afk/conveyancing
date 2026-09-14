@@ -5,9 +5,11 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, Eye, FileText, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { SignOffPanel, type SignOffState } from "@/components/lesson-content/sign-off-panel";
 
 type Step = { title: string; html: string };
 type Resource = { id: string; title: string; url: string; fileType: string };
+type SignOffActionResult = { error?: string; success?: string } | null;
 
 export function InteractiveLessonViewer({
   steps,
@@ -20,6 +22,9 @@ export function InteractiveLessonViewer({
   isDraftPreview,
   resources,
   embedded,
+  requiresSignOff = false,
+  signOff = null,
+  onSubmitSignOff,
 }: {
   steps: Step[];
   lessonTitle: string;
@@ -28,7 +33,7 @@ export function InteractiveLessonViewer({
   backLabel: string;
   onComplete: () => Promise<{
     ok: boolean;
-    reason?: "quiz_required" | "stage_locked";
+    reason?: "quiz_required" | "stage_locked" | "signoff_required";
     stageJustCompleted?: { id: string; title: string };
   }>;
   quizHref?: string;
@@ -37,12 +42,19 @@ export function InteractiveLessonViewer({
   /** Rendered inside the Lesson Builder preview step: stays in its container
    *  instead of breaking out full-bleed, and drops the redundant back-link. */
   embedded?: boolean;
+  /** Lesson.requiresSignOff — when true, the final step shows SignOffPanel
+   *  before the trainee can seal the matter. Omitted (false) in the Lesson
+   *  Builder preview, which has no real trainee session to sign for. */
+  requiresSignOff?: boolean;
+  signOff?: SignOffState;
+  onSubmitSignOff?: (state: SignOffActionResult, formData: FormData) => Promise<SignOffActionResult>;
 }) {
   const total = steps.length;
   const [step, setStep] = useState(0);
   const [showComplete, setShowComplete] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [blockedReason, setBlockedReason] = useState<"quiz_required" | "stage_locked" | "signoff_required" | undefined>();
   const focusTarget = useRef<HTMLHeadingElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -108,6 +120,7 @@ export function InteractiveLessonViewer({
       const result = await onComplete();
       if (result.ok) {
         setBlocked(false);
+        setBlockedReason(undefined);
         setShowComplete(true);
         if (result.stageJustCompleted) {
           toast.success("Stage complete!", {
@@ -116,6 +129,7 @@ export function InteractiveLessonViewer({
         }
       } else {
         setBlocked(true);
+        setBlockedReason(result.reason);
       }
     } finally {
       setCompleting(false);
@@ -296,6 +310,10 @@ export function InteractiveLessonViewer({
                   className="lesson-content mt-4"
                   dangerouslySetInnerHTML={{ __html: steps[step].html }}
                 />
+
+                {step === total - 1 && requiresSignOff && onSubmitSignOff && (
+                  <SignOffPanel signOff={signOff} action={onSubmitSignOff} />
+                )}
               </>
             )}
 
@@ -304,13 +322,19 @@ export function InteractiveLessonViewer({
                 className="mt-6 rounded-md border border-dashed px-3 py-2 text-sm"
                 style={{ borderColor: "var(--mf-clay)", color: "var(--mf-clay)" }}
               >
-                You need to pass the knowledge check before this lesson can be marked complete.
-                {quizHref && (
+                {blockedReason === "signoff_required" ? (
+                  "You need to add your sign-off above before this lesson can be marked complete."
+                ) : (
                   <>
-                    {" "}
-                    <Link href={quizHref} className="underline">
-                      Take the knowledge check
-                    </Link>
+                    You need to pass the knowledge check before this lesson can be marked complete.
+                    {quizHref && (
+                      <>
+                        {" "}
+                        <Link href={quizHref} className="underline">
+                          Take the knowledge check
+                        </Link>
+                      </>
+                    )}
                   </>
                 )}
               </p>

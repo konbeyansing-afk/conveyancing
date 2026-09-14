@@ -27,6 +27,7 @@ export function LessonQuickSettingsPanel({
   difficulty,
   estimatedMinutes,
   completionRequirement,
+  requiresSignOff,
   hasQuiz,
   isPublished,
   readiness,
@@ -41,6 +42,7 @@ export function LessonQuickSettingsPanel({
   difficulty: Difficulty;
   estimatedMinutes: number | null;
   completionRequirement: CompletionRequirement;
+  requiresSignOff: boolean;
   hasQuiz: boolean;
   isPublished: boolean;
   readiness: { ok: boolean; missing: string[] };
@@ -137,6 +139,19 @@ export function LessonQuickSettingsPanel({
               Must pass quiz{!hasQuiz && " (add a knowledge check in Settings first)"}
             </span>
           </label>
+        </div>
+
+        <div className="grid gap-1.5 border-t pt-4">
+          <Label className="text-xs uppercase tracking-wide text-muted-foreground">Sign-Off</Label>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="requiresSignOff" defaultChecked={requiresSignOff} className="mt-0.5" />
+            Require a sign-off before this lesson can be completed
+          </label>
+          <p className="text-xs text-muted-foreground">
+            Adds a name/confirmation field the trainee fills in themselves at the end of the lesson, and a
+            separate Pass/Refer for Review a Trainer or Admin records afterward. The trainer&apos;s review does
+            not block the trainee&apos;s own completion.
+          </p>
         </div>
       </form>
 

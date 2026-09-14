@@ -4,7 +4,7 @@
  * enforcement, ownership, and stage gating wired into updateMatterStage.
  */
 
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { assertDatabaseReachable, cleanup, createUser } from "./helpers";
 import { prisma } from "@/lib/prisma";
 
@@ -44,6 +44,15 @@ beforeAll(async () => {
 afterAll(async () => {
   await cleanup();
 });
+
+// ensureChecklistForWorkItem now requires a signed-in staff/VA session (see
+// 06be82b), and every test below calls it before setting up the specific
+// role its own action-under-test needs — so a valid default session must
+// already exist beforehand. vaOne always owns the fixture matter, so VA is
+// always an acceptable session for that first call; tests that need a
+// different actor for the actual assertion still call asVaTwo()/asAdmin()
+// afterward, overriding this default.
+beforeEach(() => asVaOne());
 
 describe("ensureChecklistForWorkItem", () => {
   it("generates the full QLD Purchaser checklist for a QLD/Purchase matter", async () => {

@@ -122,6 +122,7 @@ export async function updateLessonDetails(
   const completionRaw = formData.get("completionRequirement") as string;
   const estimatedMinutesRaw = (formData.get("estimatedMinutes") as string)?.trim();
   const estimatedMinutes = estimatedMinutesRaw ? Number(estimatedMinutesRaw) : null;
+  const requiresSignOff = formData.get("requiresSignOff") === "on";
 
   await prisma.lesson.update({
     where: { id: lessonId },
@@ -143,6 +144,7 @@ export async function updateLessonDetails(
         estimatedMinutes !== null && Number.isFinite(estimatedMinutes) && estimatedMinutes >= 0
           ? Math.round(estimatedMinutes)
           : null,
+      requiresSignOff,
     },
   });
 

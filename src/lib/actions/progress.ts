@@ -10,7 +10,7 @@ import { maybeCreateCertificate } from "@/lib/certificates";
 
 export type MarkLessonCompleteResult = {
   ok: boolean;
-  reason?: "quiz_required" | "stage_locked";
+  reason?: "quiz_required" | "stage_locked" | "signoff_required";
   stageJustCompleted?: { id: string; title: string };
   /** Milestones this completion unlocked, in hierarchy order. */
   newlyCompleted?: { scope: string; id: string; title: string }[];
@@ -27,6 +27,7 @@ export async function markLessonComplete(lessonId: string): Promise<MarkLessonCo
     select: {
       isPublished: true,
       completionRequirement: true,
+      requiresSignOff: true,
       quiz: { select: { id: true } },
       module: {
         select: {
@@ -65,6 +66,18 @@ export async function markLessonComplete(lessonId: string): Promise<MarkLessonCo
       select: { id: true },
     });
     if (!passed) return { ok: false, reason: "quiz_required" };
+  }
+
+  // Independent of the quiz gate, and independent of any trainer review of
+  // it — a trainee's own completion depends only on their own attestation,
+  // never on whether a trainer has since reviewed it (see
+  // src/lib/actions/lesson-signoff.ts).
+  if (lesson.requiresSignOff) {
+    const signOff = await prisma.lessonSignOff.findUnique({
+      where: { lessonId_userId: { lessonId, userId } },
+      select: { traineeSignedAt: true },
+    });
+    if (!signOff?.traineeSignedAt) return { ok: false, reason: "signoff_required" };
   }
 
   const wasStageComplete = course.stage ? await isStageComplete(course.stage.id, userId) : false;
