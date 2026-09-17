@@ -7,6 +7,7 @@ import {
   CalendarPlus,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   ClipboardList,
   Clock,
   DollarSign,
@@ -510,14 +511,57 @@ function WidgetsPanel() {
 const FILE_TABS = ["All Files", "Favourites", "Documents", "Messages", "Emails", "triSearch"] as const;
 type FileTab = (typeof FILE_TABS)[number];
 
+const DOCUMENTS_MIN_HEIGHT = 32;
+const DOCUMENTS_DEFAULT_HEIGHT = 210;
+const DOCUMENTS_MAX_HEIGHT = 560;
+
 function DocumentsBrowser() {
   const { state, dispatch, matter } = useSim();
   const [tab, setTab] = useState<FileTab>("Documents");
+  // Draggable, not just a fixed block — the Matter details list above only
+  // ever gets whatever this panel doesn't take, so a VA who needs to see
+  // more Billing/Stage-type rows needs a way to shrink this rather than
+  // scroll past a fixed-size empty file list. Starts at the minimum
+  // (effectively collapsed) whenever the matter genuinely has nothing filed
+  // yet, and grows to the usual default the moment something does.
+  const [height, setHeight] = useState(DOCUMENTS_MIN_HEIGHT);
+  const [everSized, setEverSized] = useState(false);
+  const dragState = useRef<{ startY: number; startHeight: number } | null>(null);
+
   if (!matter) return null;
 
   const docs = state.documents.filter((d) => d.matterId === matter.id);
   const matterEmails = state.emails.filter((e) => e.matterId === matter.id);
   const matterMessages = state.messages.filter((m) => m.matterId === matter.id);
+  const isEmpty = docs.length === 0 && matterEmails.length === 0 && matterMessages.length === 0;
+
+  if (!everSized && !isEmpty) {
+    setEverSized(true);
+    setHeight(DOCUMENTS_DEFAULT_HEIGHT);
+  }
+
+  const isCollapsed = height <= DOCUMENTS_MIN_HEIGHT + 4;
+
+  function beginDrag(e: React.MouseEvent) {
+    dragState.current = { startY: e.clientY, startHeight: height };
+    function onMove(ev: MouseEvent) {
+      if (!dragState.current) return;
+      const delta = ev.clientY - dragState.current.startY;
+      const next = Math.min(
+        DOCUMENTS_MAX_HEIGHT,
+        Math.max(DOCUMENTS_MIN_HEIGHT, dragState.current.startHeight - delta),
+      );
+      setHeight(next);
+      setEverSized(true);
+    }
+    function onUp() {
+      dragState.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
 
   // Each tab is a different view over the file, the way the real browser works.
   const visible =
@@ -530,28 +574,55 @@ function DocumentsBrowser() {
   const files = visible.filter((d) => d.kind !== "folder");
 
   return (
-    <div className="flex min-h-[210px] shrink-0 flex-col border-t border-[#dfe5ec] bg-white">
-      <div className="flex shrink-0 items-center gap-0 border-b border-[#dfe5ec] bg-[#f4f7fa] px-1">
-        {FILE_TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={cn(
-              "px-3 py-1.5 text-[11px] font-semibold tracking-wide uppercase",
-              tab === t ? "border border-b-0 border-[#dfe5ec] bg-white text-[#22303f]" : "text-[#5b6b7d]",
-            )}
-          >
-            {t}
-          </button>
-        ))}
+    <div className="flex shrink-0 flex-col border-t border-[#dfe5ec] bg-white" style={{ height }}>
+      <div
+        onMouseDown={beginDrag}
+        onDoubleClick={() => {
+          setHeight(isCollapsed ? DOCUMENTS_DEFAULT_HEIGHT : DOCUMENTS_MIN_HEIGHT);
+          setEverSized(true);
+        }}
+        title="Drag to resize — double-click to snap to small/large"
+        className="group flex shrink-0 cursor-row-resize items-center justify-center border-b border-[#eef2f6] bg-[#f7fafc] py-0.5 hover:bg-[#eaf1f8]"
+      >
+        <span className="h-[3px] w-[36px] rounded-full bg-[#c7d3de] group-hover:bg-[#8fa8c2]" />
       </div>
-      <div className="flex shrink-0 items-center gap-1.5 border-b border-[#eef2f6] px-3 py-1 text-[12px] text-[#3c4653]">
-        <FolderOpen className="size-3.5 text-[#e0a93e]" />
-        {tab}
-        <ChevronRight className="size-3.5 text-[#a9bcd0]" />
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <button
+        type="button"
+        onClick={() => setHeight(isCollapsed ? DOCUMENTS_DEFAULT_HEIGHT : DOCUMENTS_MIN_HEIGHT)}
+        className="flex shrink-0 items-center gap-1.5 border-b border-[#eef2f6] px-3 py-1 text-[11px] font-semibold tracking-wide text-[#5b6b7d] uppercase hover:bg-[#f2f7fc]"
+        aria-expanded={!isCollapsed}
+      >
+        {isCollapsed ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+        Files
+        {isCollapsed && !isEmpty && (
+          <span className="normal-case">
+            ({docs.length} document{docs.length === 1 ? "" : "s"})
+          </span>
+        )}
+      </button>
+      {!isCollapsed && (
+        <>
+          <div className="flex shrink-0 items-center gap-0 border-b border-[#dfe5ec] bg-[#f4f7fa] px-1">
+            {FILE_TABS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={cn(
+                  "px-3 py-1.5 text-[11px] font-semibold tracking-wide uppercase",
+                  tab === t ? "border border-b-0 border-[#dfe5ec] bg-white text-[#22303f]" : "text-[#5b6b7d]",
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5 border-b border-[#eef2f6] px-3 py-1 text-[12px] text-[#3c4653]">
+            <FolderOpen className="size-3.5 text-[#e0a93e]" />
+            {tab}
+            <ChevronRight className="size-3.5 text-[#a9bcd0]" />
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto">
         {tab === "Emails" ? (
           <>
             <GridHeader>
@@ -631,14 +702,16 @@ function DocumentsBrowser() {
             )}
           </>
         )}
-      </div>
-      <div className="flex h-[24px] shrink-0 items-center border-t border-[#dfe5ec] bg-[#f7fafc] px-3 text-[11px] text-[#5b6b7d]">
-        {tab === "Emails"
-          ? `${matterEmails.length} emails`
-          : tab === "Messages"
-            ? `${matterMessages.length} messages`
-            : `${files.length} files · ${folders.length} folders`}
-      </div>
+          </div>
+          <div className="flex h-[24px] shrink-0 items-center border-t border-[#dfe5ec] bg-[#f7fafc] px-3 text-[11px] text-[#5b6b7d]">
+            {tab === "Emails"
+              ? `${matterEmails.length} emails`
+              : tab === "Messages"
+                ? `${matterMessages.length} messages`
+                : `${files.length} files · ${folders.length} folders`}
+          </div>
+        </>
+      )}
     </div>
   );
 }
