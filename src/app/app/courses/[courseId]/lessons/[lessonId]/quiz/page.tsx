@@ -5,7 +5,6 @@ import { QuizAttemptForm } from "@/components/lesson-content/quiz-attempt-form";
 import { canPreviewUnpublished } from "@/lib/can-preview-unpublished";
 import { isEnrolledInCourse } from "@/lib/is-enrolled-in-course";
 import { isStageUnlockedForUser, isCoursePublished } from "@/lib/stage-access";
-import { matterFontVariables } from "@/lib/fonts";
 
 export default async function TraineeQuizPage({
   params,
@@ -46,14 +45,12 @@ export default async function TraineeQuizPage({
   }));
 
   return (
-    <div className={matterFontVariables}>
-      <QuizAttemptForm
-        quizId={lesson.quiz.id}
-        quizTitle={lesson.quiz.title}
-        passingScore={lesson.quiz.passingScore}
-        questions={questions}
-        courseId={course.id}
-      />
-    </div>
+    <QuizAttemptForm
+      quizId={lesson.quiz.id}
+      quizTitle={lesson.quiz.title}
+      passingScore={lesson.quiz.passingScore}
+      questions={questions}
+      courseId={course.id}
+    />
   );
 }

@@ -3,15 +3,19 @@ import { ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { JurisdictionBadge } from "@/components/lesson-content/lesson-intro-screen";
 import type { StageJourneyStatus } from "@/lib/stage-access";
+import type { TrainingJurisdiction } from "@prisma/client";
 
 export function JourneySummaryCard({
   programTitle,
+  jurisdiction = null,
   stages,
   continueHref,
   showViewAll = true,
 }: {
   programTitle: string;
+  jurisdiction?: TrainingJurisdiction | null;
   stages: StageJourneyStatus[];
   continueHref: string | null;
   showViewAll?: boolean;
@@ -24,10 +28,13 @@ export function JourneySummaryCard({
   return (
     <Card>
       <CardContent className="grid gap-5 py-5">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Your Training Journey
-          </p>
+        <div className="grid gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Your Training Journey
+            </p>
+            <JurisdictionBadge jurisdiction={jurisdiction} />
+          </div>
           <h2 className="font-heading text-lg font-semibold">{programTitle}</h2>
         </div>
 

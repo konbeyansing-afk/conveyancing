@@ -39,13 +39,13 @@ export function SignOffPanel({
   }, [state]);
 
   return (
-    <div className="mt-6 grid gap-3 rounded-lg border p-4" style={{ borderColor: "var(--mf-line)" }}>
-      <p className="mf-mono text-xs uppercase tracking-wide" style={{ color: "var(--mf-brass-dark)" }}>
+    <div className="mt-6 grid gap-3 rounded-lg border p-4" style={{ borderColor: "var(--deck-border)" }}>
+      <p className="text-xs font-medium tracking-wide uppercase" style={{ color: "var(--deck-accent)" }}>
         Certification and Sign-Off
       </p>
 
       {alreadySigned ? (
-        <div className="flex items-center gap-2 text-sm" style={{ color: "var(--mf-eucalyptus)" }}>
+        <div className="flex items-center gap-2 text-sm" style={{ color: "var(--deck-success)" }}>
           <CheckCircle2 className="size-4 shrink-0" />
           Signed by {justSignedName ?? signOff?.traineeName} on{" "}
           {signOff?.traineeSignedAt ? new Date(signOff.traineeSignedAt).toLocaleDateString("en-AU") : "today"}
@@ -53,7 +53,7 @@ export function SignOffPanel({
       ) : (
         <form action={formAction} className="grid gap-2">
           <label className="grid gap-1 text-sm" htmlFor="signoff-trainee-name">
-            <span style={{ color: "var(--mf-ink-soft)" }}>Type your full name to confirm you&apos;ve completed this lesson</span>
+            <span style={{ color: "var(--deck-ink-soft)" }}>Type your full name to confirm you&apos;ve completed this lesson</span>
             <input
               ref={nameRef}
               id="signoff-trainee-name"
@@ -62,11 +62,11 @@ export function SignOffPanel({
               maxLength={200}
               placeholder="Your full name"
               className="h-9 rounded-md border px-3 text-sm"
-              style={{ borderColor: "var(--mf-line)", backgroundColor: "var(--mf-paper)" }}
+              style={{ borderColor: "var(--deck-border)", backgroundColor: "var(--deck-surface-sunken)" }}
             />
           </label>
           {state?.error && (
-            <p className="text-sm" style={{ color: "var(--mf-clay)" }}>
+            <p className="text-sm" style={{ color: "var(--deck-warning)" }}>
               {state.error}
             </p>
           )}
@@ -79,14 +79,14 @@ export function SignOffPanel({
       {signOff?.trainerResult && (
         <div
           className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
-          style={{ borderColor: "var(--mf-line)", backgroundColor: "var(--mf-paper)" }}
+          style={{ borderColor: "var(--deck-border)", backgroundColor: "var(--deck-surface-sunken)" }}
         >
-          <ShieldCheck className="mt-0.5 size-4 shrink-0" style={{ color: "var(--mf-brass-dark)" }} />
+          <ShieldCheck className="mt-0.5 size-4 shrink-0" style={{ color: "var(--deck-accent)" }} />
           <div>
             <p className="font-medium">
               Trainer review: {signOff.trainerResult === "PASS" ? "Pass" : "Referred for review"}
             </p>
-            <p className="text-xs" style={{ color: "var(--mf-ink-soft)" }}>
+            <p className="text-xs" style={{ color: "var(--deck-ink-soft)" }}>
               {signOff.trainerName}
               {signOff.trainerSignedAt && ` · ${new Date(signOff.trainerSignedAt).toLocaleDateString("en-AU")}`}
             </p>

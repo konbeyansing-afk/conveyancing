@@ -1,6 +1,7 @@
 /**
- * Password rules, in one place so the sign-up form, the self-service change
- * form and the admin reset all agree.
+ * Password rules, in one place so account creation and the admin reset/set
+ * actions all agree. There is no self-service password change anywhere in
+ * this app — only an admin ever sets a password, including their own.
  *
  * Pure functions — no I/O, no session — so they are cheap to test exhaustively
  * and can run on the server without pulling in Prisma or Auth.js.
@@ -10,10 +11,10 @@ export const PASSWORD_MIN_LENGTH = 12;
 export const PASSWORD_MAX_LENGTH = 200;
 
 /**
- * A temporary password an admin sets when creating an account is a throwaway
- * credential — the holder must replace it on first login (mustChangePassword),
- * so it only needs to be non-trivial, not survive the full policy. The real
- * rules still apply the moment the user chooses their own.
+ * The password an admin picks when creating an account only needs to be
+ * non-trivial, not survive the full policy — the admin chose it deliberately
+ * and it stays the account's password, so the banned-list/name checks a
+ * self-chosen password would need don't apply here.
  */
 export const TEMPORARY_PASSWORD_MIN_LENGTH = 8;
 

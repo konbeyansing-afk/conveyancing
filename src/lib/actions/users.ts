@@ -30,8 +30,10 @@ export async function createUser(
   if (!name || !email || !password) return { error: "All fields are required." };
   if (!VALID_ROLES.includes(role)) return { error: "Invalid role." };
 
-  // A temporary password the admin relays and the holder must replace on
-  // first login — only needs a basic floor, not the full policy.
+  // Only a basic floor, not the full policy — the admin chose this password
+  // deliberately and it stays the account's password (there is no self-service
+  // change), so it doesn't need to pass the "guessable/reused" checks a
+  // trainee picking their own password would.
   const policy = validateTemporaryPassword(password);
   if (!policy.ok) return { error: policy.error };
 
@@ -39,10 +41,8 @@ export async function createUser(
   if (existing) return { error: "A user with that email already exists." };
 
   const passwordHash = await bcrypt.hash(password, 12);
-  // A password an admin chose and then relayed to someone is a shared secret,
-  // so the account has to replace it before it is really theirs.
   await prisma.user.create({
-    data: { name, email, passwordHash, role, mustChangePassword: true },
+    data: { name, email, passwordHash, role },
   });
 
   revalidatePath("/admin/users");
@@ -71,24 +71,22 @@ export async function deleteUser(userId: string, _formData: FormData) {
 export type ResetPasswordState = { error?: string; temporaryPassword?: string } | null;
 
 /**
- * An admin resets someone else's password — the "I'm locked out" path.
+ * An admin resets a password — the "I'm locked out" path. There is no
+ * self-service password change anywhere in this app (by design: an admin is
+ * the only one who can set a password, including their own), so this and
+ * setUserPassword below are the only ways any account's password ever
+ * changes.
  *
- * The admin never types the new password and never sees the old one: a random
- * one is generated, shown to the admin once so they can relay it, and the
- * account is flagged so the holder has to replace it on next sign-in.
- *
- * Admins cannot reset their own password this way; they use the account page,
- * which requires the current password.
+ * A random password is generated and shown to the admin once so they can
+ * relay it — the admin never types it in on the target's behalf, so it's
+ * never visible to anyone but whoever it gets relayed to.
  */
 export async function resetUserPassword(
   userId: string,
   _prevState: ResetPasswordState,
   _formData: FormData
 ): Promise<ResetPasswordState> {
-  const actor = await requireRole("ADMIN");
-  if (actor.id === userId) {
-    return { error: "Change your own password from your account page." };
-  }
+  await requireRole("ADMIN");
 
   const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!target) return { error: "That user no longer exists." };
@@ -98,7 +96,6 @@ export async function resetUserPassword(
     where: { id: userId },
     data: {
       passwordHash: await bcrypt.hash(temporaryPassword, 12),
-      mustChangePassword: true,
       passwordChangedAt: new Date(),
     },
   });
@@ -108,18 +105,16 @@ export async function resetUserPassword(
 }
 
 /**
- * Sets a specific password for another account. Used only where an admin needs
- * to choose the value themselves; the generated reset above is preferred.
+ * Sets a specific password for an account (including the admin's own). Used
+ * only where an admin needs to choose the value themselves; the generated
+ * reset above is preferred.
  */
 export async function setUserPassword(
   userId: string,
   _prevState: ResetPasswordState,
   formData: FormData
 ): Promise<ResetPasswordState> {
-  const actor = await requireRole("ADMIN");
-  if (actor.id === userId) {
-    return { error: "Change your own password from your account page." };
-  }
+  await requireRole("ADMIN");
 
   const password = (formData.get("password") as string) ?? "";
   const confirmation = (formData.get("confirmPassword") as string) ?? "";
@@ -140,7 +135,6 @@ export async function setUserPassword(
     where: { id: userId },
     data: {
       passwordHash: await bcrypt.hash(password, 12),
-      mustChangePassword: true,
       passwordChangedAt: new Date(),
     },
   });

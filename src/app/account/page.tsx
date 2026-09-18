@@ -1,9 +1,7 @@
-import { ShieldAlert } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { ChangePasswordForm } from "@/components/account/change-password-form";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -20,7 +18,6 @@ export default async function AccountPage() {
       name: true,
       email: true,
       role: true,
-      mustChangePassword: true,
       passwordChangedAt: true,
       createdAt: true,
     },
@@ -32,23 +29,8 @@ export default async function AccountPage() {
     <div className="mx-auto grid w-full max-w-3xl gap-6">
       <PageHeader
         title="Your account"
-        description="Your sign-in details and password."
+        description="Your sign-in details."
       />
-
-      {user.mustChangePassword && (
-        <Card className="border-warning/40 bg-warning/5">
-          <CardContent className="flex items-start gap-3 py-4">
-            <ShieldAlert className="mt-0.5 size-5 shrink-0 text-warning" />
-            <div>
-              <p className="text-sm font-medium">Choose your own password</p>
-              <p className="text-sm text-muted-foreground">
-                This account is still using a password someone else set for it. Change it below so
-                only you know it.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>
@@ -79,19 +61,9 @@ export default async function AccountPage() {
                 : "Never"}
             </span>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Change password</CardTitle>
-          <CardDescription>
-            You&apos;ll need your current password. Your password is never shown back to you or to
-            anyone else.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ChangePasswordForm />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Only an admin can change your password. Contact one if you need it reset.
+          </p>
         </CardContent>
       </Card>
     </div>

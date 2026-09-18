@@ -35,8 +35,8 @@ export default async function AdminUsersPage() {
         <CardHeader>
           <CardTitle className="text-base">New user</CardTitle>
           <CardDescription>
-            They&apos;ll sign in with this email and temporary password — share it with them
-            directly and ask them to change it after first login.
+            They&apos;ll sign in with this email and password — share it with them directly. Only an
+            admin can change a user&apos;s password.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -66,14 +66,16 @@ export default async function AdminUsersPage() {
                       )}
                     </p>
                     <p className="text-sm text-muted-foreground">{user.email}</p>
-                    {user.mustChangePassword && (
-                      <p className="mt-1 text-xs font-medium text-warning">
-                        Still using a password someone else set
-                      </p>
-                    )}
                   </div>
                   {isSelf ? (
-                    <Badge>{user.role}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge>{user.role}</Badge>
+                      <ResetPasswordDialog
+                        userId={user.id}
+                        userName={user.name}
+                        userEmail={user.email}
+                      />
+                    </div>
                   ) : (
                     <form action={updateRoleWithId} className="flex items-center gap-2">
                       <select

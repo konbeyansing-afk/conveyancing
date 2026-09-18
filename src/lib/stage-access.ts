@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import type { TrainingJurisdiction } from "@prisma/client";
 
 /**
  * A course is published either through its new Stage (real content) or, for the one
@@ -226,22 +227,25 @@ export async function getNextLessonHrefForStage(stageId: string, userId: string)
  */
 export async function getPrimaryProgramForUser(
   userId: string
-): Promise<{ id: string; title: string } | null> {
+): Promise<{ id: string; title: string; jurisdiction: TrainingJurisdiction | null } | null> {
   const enrollments = await prisma.enrollment.findMany({
     where: { userId },
     orderBy: { enrolledAt: "asc" },
     select: {
       course: {
         select: {
-          program: { select: { id: true, title: true } },
-          stage: { select: { program: { select: { id: true, title: true } } } },
+          program: { select: { id: true, title: true, jurisdiction: true } },
+          stage: { select: { program: { select: { id: true, title: true, jurisdiction: true } } } },
         },
       },
     },
   });
 
   if (enrollments.length > 0) {
-    const byProgram = new Map<string, { id: string; title: string; count: number; first: number }>();
+    const byProgram = new Map<
+      string,
+      { id: string; title: string; jurisdiction: TrainingJurisdiction | null; count: number; first: number }
+    >();
     enrollments.forEach((e, index) => {
       // A course carries both a direct programId and, once it sits in a stage,
       // that stage's program. Where they disagree the stage is authoritative —
@@ -252,13 +256,13 @@ export async function getPrimaryProgramForUser(
       else byProgram.set(program.id, { ...program, count: 1, first: index });
     });
     const best = [...byProgram.values()].sort((a, b) => b.count - a.count || a.first - b.first)[0];
-    return { id: best.id, title: best.title };
+    return { id: best.id, title: best.title, jurisdiction: best.jurisdiction };
   }
 
   return prisma.program.findFirst({
     where: { isPublished: true, stages: { some: {} } },
     orderBy: { createdAt: "asc" },
-    select: { id: true, title: true },
+    select: { id: true, title: true, jurisdiction: true },
   });
 }
 

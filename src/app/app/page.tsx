@@ -8,6 +8,7 @@ import { formatRelativeTime } from "@/lib/format-relative-time";
 import { getContinueLearningInfo, getJourneyForUser, getPrimaryProgramForUser } from "@/lib/stage-access";
 import { ContinueLearningCard } from "@/components/trainee/continue-learning-card";
 import { ProgramProgressCard } from "@/components/trainee/program-progress-card";
+import { JurisdictionBadge } from "@/components/lesson-content/lesson-intro-screen";
 
 export default async function TraineeDashboardPage() {
   const session = await auth();
@@ -91,7 +92,10 @@ export default async function TraineeDashboardPage() {
   return (
     <div className="grid gap-6">
       <div>
-        <h1 className="text-2xl font-semibold text-balance">Welcome back, {firstName}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-semibold text-balance">Welcome back, {firstName}</h1>
+          <JurisdictionBadge jurisdiction={program?.jurisdiction} />
+        </div>
         <p className="text-muted-foreground">
           Track your training, continue your lessons, and monitor your progress.
         </p>

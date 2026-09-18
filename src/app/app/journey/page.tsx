@@ -40,6 +40,7 @@ export default async function TrainingJourneyPage() {
 
       <JourneySummaryCard
         programTitle={program.title}
+        jurisdiction={program.jurisdiction}
         stages={stages}
         continueHref={continueHref}
         showViewAll={false}

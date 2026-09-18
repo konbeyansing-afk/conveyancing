@@ -53,49 +53,49 @@
 }
 
 :root {
-  /* Brand scale — Conveyancing Academy navy/blue system */
-  --brand-navy: #021024;
-  --brand-dark-blue: #052659;
-  --brand-medium-blue: #5483b3;
-  --brand-soft-blue: #7da0ca;
-  --brand-light-blue: #c1e8ff;
+  /* Brand scale — Conveyancing Academy modern blue/green system */
+  --brand-slate: #0f172a;
+  --brand-blue: #2563eb;
+  --brand-blue-light: #3b82f6;
+  --brand-blue-pale: #dbeafe;
+  --brand-green: #059669;
 
-  --background: #f7fafc;
-  --foreground: #021024;
+  --background: #f8fafc;
+  --foreground: var(--brand-slate);
   --card: #ffffff;
-  --card-foreground: #021024;
+  --card-foreground: var(--brand-slate);
   --popover: #ffffff;
-  --popover-foreground: #021024;
-  --primary: var(--brand-dark-blue);
+  --popover-foreground: var(--brand-slate);
+  --primary: var(--brand-blue);
   --primary-foreground: #ffffff;
-  --secondary: #eaf2f8;
-  --secondary-foreground: #021024;
-  --muted: #eef3f8;
-  --muted-foreground: #52657a;
-  --accent: var(--brand-light-blue);
-  --accent-foreground: var(--brand-dark-blue);
+  --secondary: #eff6ff;
+  --secondary-foreground: var(--brand-slate);
+  --muted: #f1f5fd;
+  --muted-foreground: #64748b;
+  --accent: var(--brand-blue-pale);
+  --accent-foreground: #1e3a8a;
   --destructive: #dc2626;
-  --success: #16a34a;
+  --success: var(--brand-green);
   --success-foreground: #ffffff;
   --warning: #d97706;
   --warning-foreground: #ffffff;
-  --border: #d9e4ef;
-  --input: #d9e4ef;
-  --ring: var(--brand-dark-blue);
-  --chart-1: var(--brand-navy);
-  --chart-2: var(--brand-dark-blue);
-  --chart-3: var(--brand-medium-blue);
-  --chart-4: var(--brand-soft-blue);
-  --chart-5: #16a34a;
+  --border: #e4ecfc;
+  --input: #e4ecfc;
+  --ring: var(--brand-blue);
+  --chart-1: var(--brand-blue);
+  --chart-2: var(--brand-blue-light);
+  --chart-3: var(--brand-slate);
+  --chart-4: #93c5fd;
+  --chart-5: var(--brand-green);
   --radius: 0.75rem;
-  --sidebar: var(--brand-navy);
-  --sidebar-foreground: #eaf1f8;
-  --sidebar-primary: var(--brand-dark-blue);
+  --sidebar: var(--brand-slate);
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: var(--brand-blue);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #0e1e3a;
-  --sidebar-accent-foreground: #eaf1f8;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #e2e8f0;
   --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: var(--brand-dark-blue);
+  --sidebar-ring: var(--brand-blue);
 }
 
 .dark {
@@ -209,50 +209,120 @@
   @apply border-primary/30 bg-primary/5 text-foreground;
 }
 
-/* ---- Matter File theme: scoped to the trainee lesson experience ---- */
-
-.matter-file-theme {
-  --mf-ink: #16233d;
-  --mf-ink-soft: #5b6478;
-  --mf-paper: #faf7f2;
-  --mf-paper-raised: #ffffff;
-  --mf-brass: #b8863e;
-  --mf-brass-dark: #96692a;
-  --mf-brass-soft: #f1e4cb;
-  --mf-eucalyptus: #5c7a63;
-  --mf-eucalyptus-soft: #e3ebe4;
-  --mf-clay: #b65a3d;
-  --mf-line: #e4dfd3;
-  background-color: var(--mf-paper);
-  color: var(--mf-ink);
-  font-family: var(--mf-font-body);
-}
+/* ---- Utility classes kept for the admin lesson catalogue's numbered badges ---- */
 
 .mf-display {
   font-family: var(--mf-font-display);
 }
 
 .mf-mono {
-  font-family: var(--mf-font-mono);
+  font-family: var(--mf-font-mono, inherit);
   letter-spacing: 0.03em;
 }
 
-.mf-rail-node,
-.mf-rail-line-fill {
-  transition:
-    background-color 300ms ease,
-    border-color 300ms ease,
-    color 300ms ease,
-    height 500ms cubic-bezier(0.65, 0, 0.35, 1);
+/* ---- Lesson deck theme: the interactive presentation-style lesson viewer ---- */
+
+.lesson-deck-theme {
+  --deck-ink: var(--brand-slate);
+  --deck-ink-soft: #64748b;
+  --deck-surface: #ffffff;
+  --deck-surface-sunken: #f8fafc;
+  --deck-border: #e2e8f0;
+  --deck-accent: var(--brand-blue);
+  --deck-accent-soft: var(--brand-blue-pale);
+  --deck-success: var(--brand-green);
+  --deck-success-soft: #d1fae5;
+  --deck-warning: #d97706;
+  --deck-warning-soft: #fef3c7;
+  background-color: var(--deck-surface-sunken);
+  color: var(--deck-ink);
 }
 
-.mf-step-enter {
-  animation: mf-step-in 320ms ease both;
+.deck-slide-enter {
+  animation: deck-slide-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-@keyframes mf-step-in {
+@keyframes deck-slide-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.deck-complete-badge {
+  animation: deck-complete-pop 520ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+@keyframes deck-complete-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deck-slide-enter,
+  .deck-complete-badge {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.lesson-deck-theme .lesson-content h2,
+.lesson-deck-theme .lesson-content h3 {
+  color: var(--deck-ink);
+}
+/* The slide already shows its own title from the same heading (see split-into-steps.ts) */
+.lesson-slide-body > h2:first-child {
+  display: none;
+}
+.lesson-deck-theme .lesson-content table {
+  border-color: var(--deck-border);
+}
+.lesson-deck-theme .lesson-content th {
+  background-color: var(--deck-accent-soft);
+  border-color: var(--deck-border);
+  color: var(--deck-ink);
+}
+.lesson-deck-theme .lesson-content td {
+  border-color: var(--deck-border);
+}
+.lesson-deck-theme .lesson-content div[data-callout][data-variant="warning"] {
+  border-color: color-mix(in srgb, var(--deck-warning) 40%, transparent);
+  background-color: var(--deck-warning-soft);
+  color: #92400e;
+}
+.lesson-deck-theme .lesson-content div[data-callout][data-variant="note"] {
+  border-color: var(--deck-border);
+  background-color: var(--deck-surface-sunken);
+  color: var(--deck-ink);
+}
+.lesson-deck-theme .lesson-content div[data-callout][data-variant="tip"] {
+  border-color: color-mix(in srgb, var(--deck-success) 35%, transparent);
+  background-color: var(--deck-success-soft);
+  color: #065f46;
+}
+
+/* ---- Login page: entrance stagger + ambient drift ---- */
+
+.login-rise {
+  opacity: 0;
+  animation: login-rise-in 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--login-delay, 0ms);
+}
+@keyframes login-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -260,65 +330,31 @@
   }
 }
 
-.mf-seal {
-  animation: mf-seal-stamp 640ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+.login-drift {
+  animation: login-drift-move 14s ease-in-out infinite;
 }
-@keyframes mf-seal-stamp {
-  0% {
-    transform: scale(2.4) rotate(-10deg);
-    opacity: 0;
-  }
-  55% {
-    transform: scale(0.92) rotate(2deg);
-    opacity: 1;
-  }
-  78% {
-    transform: scale(1.05) rotate(-1deg);
-  }
+.login-drift-slow {
+  animation: login-drift-move 20s ease-in-out infinite reverse;
+}
+@keyframes login-drift-move {
+  0%,
   100% {
-    transform: scale(1) rotate(0deg);
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-4%, 5%) scale(1.08);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mf-step-enter,
-  .mf-seal,
-  .mf-rail-line-fill {
+  .login-rise {
+    opacity: 1;
     animation: none !important;
-    transition: none !important;
   }
-}
-
-.matter-file-theme .lesson-content h2,
-.matter-file-theme .lesson-content h3 {
-  font-family: var(--mf-font-display);
-  color: var(--mf-ink);
-}
-.matter-file-theme .lesson-content table {
-  border-color: var(--mf-line);
-}
-.matter-file-theme .lesson-content th {
-  background-color: var(--mf-brass-soft);
-  border-color: var(--mf-line);
-  color: var(--mf-ink);
-}
-.matter-file-theme .lesson-content td {
-  border-color: var(--mf-line);
-}
-.matter-file-theme .lesson-content div[data-callout][data-variant="warning"] {
-  border-color: color-mix(in srgb, var(--mf-clay) 45%, transparent);
-  background-color: color-mix(in srgb, var(--mf-clay) 8%, transparent);
-  color: var(--mf-clay);
-}
-.matter-file-theme .lesson-content div[data-callout][data-variant="note"] {
-  border-color: var(--mf-line);
-  background-color: color-mix(in srgb, var(--mf-ink) 4%, transparent);
-  color: var(--mf-ink);
-}
-.matter-file-theme .lesson-content div[data-callout][data-variant="tip"] {
-  border-color: color-mix(in srgb, var(--mf-eucalyptus) 40%, transparent);
-  background-color: var(--mf-eucalyptus-soft);
-  color: var(--mf-eucalyptus);
+  .login-drift,
+  .login-drift-slow {
+    animation: none !important;
+  }
 }
 
 /* Printing a page (e.g. the settlement calculator's Export/Print button)

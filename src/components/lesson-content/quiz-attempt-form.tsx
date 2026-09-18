@@ -47,19 +47,19 @@ export function QuizAttemptForm({
   if (state) {
     const resultByQuestion = new Map(state.results.map((r) => [r.questionId, r]));
     return (
-      <div className="matter-file-theme -m-4 min-h-[calc(100vh-3.5rem)] px-4 py-6 sm:px-8 sm:py-10">
+      <div className="lesson-deck-theme -m-4 min-h-[calc(100vh-3.5rem)] px-4 py-6 sm:px-8 sm:py-10">
         <div className="mx-auto max-w-2xl">
           <div
             className="rounded-xl border p-6 text-center"
-            style={{ borderColor: "var(--mf-line)", backgroundColor: "var(--mf-paper-raised)" }}
+            style={{ borderColor: "var(--deck-border)", backgroundColor: "var(--deck-surface)" }}
           >
-            <p className="mf-mono text-xs uppercase tracking-wide" style={{ color: "var(--mf-brass-dark)" }}>
+            <p className="text-xs font-medium tracking-wide uppercase" style={{ color: "var(--deck-accent)" }}>
               {quizTitle}
             </p>
-            <p className="mf-display mt-2 text-4xl font-medium">{state.score}%</p>
+            <p className="mt-2 text-4xl font-semibold">{state.score}%</p>
             <p
               className="mt-1 text-sm font-medium"
-              style={{ color: state.passed ? "var(--mf-eucalyptus)" : "var(--mf-clay)" }}
+              style={{ color: state.passed ? "var(--deck-success)" : "var(--deck-warning)" }}
             >
               {state.passed ? `Passed (needed ${state.passingScore}%)` : `Not yet — needed ${state.passingScore}%`}
             </p>
@@ -71,8 +71,8 @@ export function QuizAttemptForm({
               return (
                 <Card key={q.id}>
                   <CardHeader className="flex-row items-start gap-2">
-                    {result?.correct === true && <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" style={{ color: "var(--mf-eucalyptus)" }} />}
-                    {result?.correct === false && <XCircle className="mt-0.5 size-5 shrink-0" style={{ color: "var(--mf-clay)" }} />}
+                    {result?.correct === true && <CheckCircle2 className="mt-0.5 size-5 shrink-0" style={{ color: "var(--deck-success)" }} />}
+                    {result?.correct === false && <XCircle className="mt-0.5 size-5 shrink-0" style={{ color: "var(--deck-warning)" }} />}
                     {result?.correct === null && <HelpCircle className="mt-0.5 size-5 shrink-0 text-muted-foreground" />}
                     <div>
                       <CardTitle className="text-sm font-normal">
@@ -82,7 +82,7 @@ export function QuizAttemptForm({
                         <p className="mt-1 text-xs text-muted-foreground">Recorded for trainer review.</p>
                       )}
                       {result?.correct === false && result.correctAnswer && (
-                        <p className="mt-1 text-xs font-medium" style={{ color: "var(--mf-eucalyptus)" }}>
+                        <p className="mt-1 text-xs font-medium" style={{ color: "var(--deck-success)" }}>
                           Correct answer: {result.correctAnswer}
                         </p>
                       )}
@@ -102,7 +102,7 @@ export function QuizAttemptForm({
             </Button>
             <Button
               nativeButton={false}
-              style={{ backgroundColor: "var(--mf-brass)", color: "var(--mf-paper)" }}
+              style={{ backgroundColor: "var(--deck-accent)", color: "#ffffff" }}
               render={<Link href="/app" />}
             >
               <LayoutDashboard /> Back to Dashboard
@@ -114,13 +114,13 @@ export function QuizAttemptForm({
   }
 
   return (
-    <div className="matter-file-theme -m-4 min-h-[calc(100vh-3.5rem)] px-4 py-6 sm:px-8 sm:py-10">
+    <div className="lesson-deck-theme -m-4 min-h-[calc(100vh-3.5rem)] px-4 py-6 sm:px-8 sm:py-10">
       <div className="mx-auto max-w-2xl">
-        <p className="mf-mono text-xs uppercase tracking-wide" style={{ color: "var(--mf-brass-dark)" }}>
+        <p className="text-xs font-medium tracking-wide uppercase" style={{ color: "var(--deck-accent)" }}>
           Knowledge check
         </p>
-        <h1 className="mf-display text-3xl font-medium">{quizTitle}</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--mf-ink-soft)" }}>
+        <h1 className="text-3xl font-semibold" style={{ color: "var(--deck-ink)" }}>{quizTitle}</h1>
+        <p className="mt-1 text-sm" style={{ color: "var(--deck-ink-soft)" }}>
           Answer every question, then submit — you&apos;ll see your score and feedback right away.
           You need {passingScore}% to pass.
         </p>
@@ -130,7 +130,7 @@ export function QuizAttemptForm({
             <div
               key={q.id}
               className="rounded-xl border p-5"
-              style={{ borderColor: "var(--mf-line)", backgroundColor: "var(--mf-paper-raised)" }}
+              style={{ borderColor: "var(--deck-border)", backgroundColor: "var(--deck-surface)" }}
             >
               <p className="text-sm font-medium">
                 {i + 1}. {q.prompt}
@@ -150,7 +150,7 @@ export function QuizAttemptForm({
             </div>
           ))}
 
-          <Button type="submit" disabled={pending} style={{ backgroundColor: "var(--mf-brass)", color: "var(--mf-paper)" }}>
+          <Button type="submit" disabled={pending} style={{ backgroundColor: "var(--deck-accent)", color: "#ffffff" }}>
             {pending ? "Submitting…" : "Submit answers"}
           </Button>
         </form>

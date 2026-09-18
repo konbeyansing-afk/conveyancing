@@ -16,9 +16,10 @@ import {
 } from "@/components/ui/dialog";
 
 /**
- * Generates a one-time password for another account and shows it to the admin
- * exactly once, so they can relay it. Nothing here ever displays or asks for
- * the account's existing password.
+ * Generates a new password for an account (another user's, or the acting
+ * admin's own) and shows it to the admin exactly once, so they can relay or
+ * record it. Nothing here ever displays or asks for the account's existing
+ * password.
  */
 export function ResetPasswordDialog({
   userId,
@@ -52,9 +53,8 @@ export function ResetPasswordDialog({
         <DialogHeader>
           <DialogTitle>Reset password for {userName}?</DialogTitle>
           <DialogDescription>
-            This replaces the password on {userEmail} with a new random one and requires them to
-            choose their own the next time they sign in. Their existing password stops working
-            immediately.
+            This replaces the password on {userEmail} with a new random one. Their existing
+            password stops working immediately — only an admin can set a password on this account.
           </DialogDescription>
         </DialogHeader>
 

@@ -102,6 +102,19 @@ enum EnrollmentStatus {
   COMPLETED
 }
 
+/**
+ * The jurisdiction a *training program* belongs to — deliberately a separate
+ * enum from Jurisdiction (which is a VA's live conveyancing-matter concept,
+ * QLD/NSW only). A training program can exist for a jurisdiction with no
+ * matter-workflow support yet (VIC, UK), so the two enums are free to diverge.
+ */
+enum TrainingJurisdiction {
+  QLD
+  NSW
+  VIC
+  UK
+}
+
 model User {
   id                     String              @id @default(cuid())
   name                   String
@@ -324,6 +337,13 @@ model Program {
   description       String?
   coverImageUrl     String?
   isPublished       Boolean               @default(false)
+  /**
+   * Which real-world jurisdiction this program trains for. Null for
+   * cross-jurisdiction or general programs (e.g. Company Onboarding) — never
+   * guessed from the title at read time, only set here via a one-off
+   * backfill (prisma/scripts/set-program-jurisdiction.ts).
+   */
+  jurisdiction      TrainingJurisdiction?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
   courses           Course[]

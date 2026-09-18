@@ -4,12 +4,12 @@ import { auth } from "@/auth";
 import { lessonContentToHtml } from "@/components/lesson-content/lesson-content-html";
 import { InteractiveLessonViewer } from "@/components/lesson-content/interactive-lesson-viewer";
 import { splitIntoSteps } from "@/lib/tiptap/split-into-steps";
+import { findNextLesson } from "@/lib/next-lesson";
 import { markLessonComplete } from "@/lib/actions/progress";
 import { submitTraineeSignOff } from "@/lib/actions/lesson-signoff";
 import { canPreviewUnpublished } from "@/lib/can-preview-unpublished";
 import { isEnrolledInCourse } from "@/lib/is-enrolled-in-course";
 import { isStageUnlockedForUser, isCoursePublished } from "@/lib/stage-access";
-import { matterFontVariables } from "@/lib/fonts";
 import type { JSONContent } from "@tiptap/core";
 
 export default async function TraineeLessonPage({
@@ -22,8 +22,27 @@ export default async function TraineeLessonPage({
   const lesson = await prisma.lesson.findUnique({
     where: { id: lessonId },
     include: {
-      module: { include: { course: { include: { program: true, stage: { include: { program: true } } } } } },
-      quiz: { select: { id: true } },
+      module: {
+        include: {
+          course: {
+            include: {
+              program: true,
+              stage: { include: { program: true } },
+              modules: {
+                orderBy: { order: "asc" },
+                select: {
+                  id: true,
+                  order: true,
+                  lessons: { select: { id: true, order: true, isPublished: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+      quiz: {
+        select: { id: true, title: true, passingScore: true, _count: { select: { questions: true } } },
+      },
       attachments: { orderBy: { createdAt: "desc" } },
     },
   });
@@ -51,39 +70,61 @@ export default async function TraineeLessonPage({
   const completeAction = markLessonComplete.bind(null, lesson.id);
   const signOffAction = submitTraineeSignOff.bind(null, lesson.id);
 
-  const signOffRow = lesson.requiresSignOff && userId
-    ? await prisma.lessonSignOff.findUnique({
-        where: { lessonId_userId: { lessonId: lesson.id, userId } },
-        select: { traineeName: true, traineeSignedAt: true, trainerName: true, trainerResult: true, trainerSignedAt: true },
-      })
-    : null;
+  const [signOffRow, progressRow] = await Promise.all([
+    lesson.requiresSignOff && userId
+      ? prisma.lessonSignOff.findUnique({
+          where: { lessonId_userId: { lessonId: lesson.id, userId } },
+          select: { traineeName: true, traineeSignedAt: true, trainerName: true, trainerResult: true, trainerSignedAt: true },
+        })
+      : Promise.resolve(null),
+    userId
+      ? prisma.lessonProgress.findUnique({
+          where: { userId_lessonId: { userId, lessonId: lesson.id } },
+          select: { completedAt: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  const next = findNextLesson(course.modules, lesson.module.id, lesson.id);
+  const nextLesson = next ? await prisma.lesson.findUnique({ where: { id: next.lessonId }, select: { title: true } }) : null;
+
+  const jurisdiction = course.program.jurisdiction ?? course.stage?.program.jurisdiction ?? null;
 
   return (
-    <div className={matterFontVariables}>
-      <InteractiveLessonViewer
-        steps={steps}
-        lessonTitle={lesson.title}
-        moduleTitle={lesson.module.title}
-        backHref={`/app/courses/${course.id}`}
-        backLabel={course.title}
-        onComplete={completeAction}
-        quizHref={lesson.quiz ? `/app/courses/${course.id}/lessons/${lesson.id}/quiz` : undefined}
-        isDraftPreview={!isPublished}
-        resources={lesson.attachments}
-        requiresSignOff={lesson.requiresSignOff}
-        signOff={
-          signOffRow
-            ? {
-                traineeName: signOffRow.traineeName,
-                traineeSignedAt: signOffRow.traineeSignedAt?.toISOString() ?? null,
-                trainerName: signOffRow.trainerName,
-                trainerResult: signOffRow.trainerResult,
-                trainerSignedAt: signOffRow.trainerSignedAt?.toISOString() ?? null,
-              }
-            : null
-        }
-        onSubmitSignOff={signOffAction}
-      />
-    </div>
+    <InteractiveLessonViewer
+      steps={steps}
+      lessonTitle={lesson.title}
+      moduleTitle={lesson.module.title}
+      backHref={`/app/courses/${course.id}`}
+      backLabel={course.title}
+      onComplete={completeAction}
+      quizHref={lesson.quiz ? `/app/courses/${course.id}/lessons/${lesson.id}/quiz` : undefined}
+      quizMeta={
+        lesson.quiz
+          ? { title: lesson.quiz.title, questionCount: lesson.quiz._count.questions, passingScore: lesson.quiz.passingScore }
+          : undefined
+      }
+      isDraftPreview={!isPublished}
+      resources={lesson.attachments}
+      requiresSignOff={lesson.requiresSignOff}
+      signOff={
+        signOffRow
+          ? {
+              traineeName: signOffRow.traineeName,
+              traineeSignedAt: signOffRow.traineeSignedAt?.toISOString() ?? null,
+              trainerName: signOffRow.trainerName,
+              trainerResult: signOffRow.trainerResult,
+              trainerSignedAt: signOffRow.trainerSignedAt?.toISOString() ?? null,
+            }
+          : null
+      }
+      onSubmitSignOff={signOffAction}
+      jurisdiction={jurisdiction}
+      stageTitle={course.stage?.title ?? null}
+      estimatedMinutes={lesson.estimatedMinutes}
+      progressState={progressRow?.completedAt ? "completed" : "not_started"}
+      nextLessonHref={next ? `/app/courses/${course.id}/lessons/${next.lessonId}` : null}
+      nextLessonTitle={nextLesson?.title ?? null}
+    />
   );
 }
