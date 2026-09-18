@@ -204,20 +204,22 @@ export default async function TrainerTraineeDetailPage({
           ) : (
             <ul className="grid gap-2">
               {attempts.map((attempt) => (
-                <li
-                  key={attempt.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{attempt.quiz.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {attempt.submittedAt ? shortDate(attempt.submittedAt) : ""} · pass mark{" "}
-                      {attempt.quiz.passingScore}%
-                    </p>
-                  </div>
-                  <Badge variant={attempt.passed ? "default" : "destructive"}>
-                    {attempt.score}%
-                  </Badge>
+                <li key={attempt.id}>
+                  <Link
+                    href={`/trainer/trainees/${trainee.id}/quiz-attempts/${attempt.id}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 hover:bg-muted/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{attempt.quiz.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {attempt.submittedAt ? shortDate(attempt.submittedAt) : ""} · pass mark{" "}
+                        {attempt.quiz.passingScore}%
+                      </p>
+                    </div>
+                    <Badge variant={attempt.passed ? "default" : "destructive"}>
+                      {attempt.score}%
+                    </Badge>
+                  </Link>
                 </li>
               ))}
             </ul>
