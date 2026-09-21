@@ -1,4 +1,4 @@
-import { Award, CheckCircle2, Route } from "lucide-react";
+import { Award, CheckCircle2, ClipboardCheck, Route } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { StatTile } from "@/components/stat-tile";
@@ -8,7 +8,7 @@ import { formatRelativeTime } from "@/lib/format-relative-time";
 import { getContinueLearningInfo, getJourneyForUser, getPrimaryProgramForUser } from "@/lib/stage-access";
 import { ContinueLearningCard } from "@/components/trainee/continue-learning-card";
 import { ProgramProgressCard } from "@/components/trainee/program-progress-card";
-import { JurisdictionBadge } from "@/components/lesson-content/lesson-intro-screen";
+import { DashboardHero } from "@/components/trainee/dashboard-hero";
 
 export default async function TraineeDashboardPage() {
   const session = await auth();
@@ -91,15 +91,18 @@ export default async function TraineeDashboardPage() {
 
   return (
     <div className="grid gap-6">
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold text-balance">Welcome back, {firstName}</h1>
-          <JurisdictionBadge jurisdiction={program?.jurisdiction} />
-        </div>
-        <p className="text-muted-foreground">
-          Track your training, continue your lessons, and monitor your progress.
-        </p>
-      </div>
+      <DashboardHero
+        firstName={firstName}
+        programTitle={program?.title ?? null}
+        jurisdiction={program?.jurisdiction}
+        stageNumber={currentStage ? currentStage.order + 1 : null}
+        stageTitle={currentStage?.title ?? null}
+        lessonTitle={continueTarget?.lesson.title ?? null}
+        continueHref={continueTarget?.href ?? null}
+        percent={totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0}
+        completedLessons={completedLessons}
+        totalLessons={totalLessons}
+      />
 
       {stages.length === 0 ? (
         <EmptyState
@@ -109,14 +112,22 @@ export default async function TraineeDashboardPage() {
         />
       ) : (
         <>
-          <ContinueLearningCard
-            stageTitle={currentStage?.title ?? null}
-            stageHasPublishedLessons={(currentStage?.totalLessons ?? 0) > 0}
-            target={continueTarget}
-            upcomingAssessment={upcomingAssessment}
-            allStagesComplete={allStagesComplete}
-            certificateStatus={primaryCertificate?.status ?? null}
-          />
+          {(!continueTarget || allStagesComplete) && (
+            <ContinueLearningCard
+              stageTitle={currentStage?.title ?? null}
+              stageHasPublishedLessons={(currentStage?.totalLessons ?? 0) > 0}
+              target={continueTarget}
+              upcomingAssessment={upcomingAssessment}
+              allStagesComplete={allStagesComplete}
+              certificateStatus={primaryCertificate?.status ?? null}
+            />
+          )}
+          {continueTarget && upcomingAssessment && !allStagesComplete && (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <ClipboardCheck className="size-4 shrink-0" />
+              Assessment coming up: <span className="font-medium text-foreground">{upcomingAssessment.quizTitle}</span> ({upcomingAssessment.lessonTitle})
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatTile

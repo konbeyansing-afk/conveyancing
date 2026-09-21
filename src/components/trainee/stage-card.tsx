@@ -25,7 +25,8 @@ export function StageCard({ stage }: { stage: StageJourneyStatus }) {
       <Card
         className={cn(
           "h-full gap-0 overflow-hidden py-0 transition-all group-focus-visible:ring-2 group-focus-visible:ring-ring",
-          !isLocked && "group-hover:-translate-y-0.5 group-hover:shadow-md"
+          stage.status === "current" && "ring-2 ring-primary/40",
+          !isLocked && "group-hover:-translate-y-0.5 group-hover:shadow-(--shadow-raised)"
         )}
       >
         {isLocked ? (
@@ -38,8 +39,9 @@ export function StageCard({ stage }: { stage: StageJourneyStatus }) {
 
         <CardContent className="flex h-full flex-col gap-3 py-5">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Stage {stage.order + 1}
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase tabular-nums">
+              <span aria-hidden className="text-primary">{String(stage.order + 1).padStart(2, "0")}</span>
+              <span className="sr-only">Stage {stage.order + 1}</span>
             </p>
             <StageStatusBadge status={stage.status} />
           </div>
