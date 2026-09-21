@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ActionstepWorkbench } from "@/components/actionstep/actionstep-workbench";
 import { PageHeader } from "@/components/page-header";
+import { TrainingModeBanner } from "@/components/simulator/training-mode-banner";
 
 export const metadata: Metadata = {
   title: "Actionstep Simulator",
@@ -13,6 +14,7 @@ export default function ActionstepSimulatorPage() {
         title="Actionstep Simulator"
         description="A safe replica of a workflow-driven practice management system. Matters move through workflow steps, and a step won't release a matter until its required participants and data fields are filled in."
       />
+      <TrainingModeBanner system="Actionstep" />
       <ActionstepWorkbench />
     </div>
   );

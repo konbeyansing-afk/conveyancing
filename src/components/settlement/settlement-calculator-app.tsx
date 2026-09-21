@@ -13,6 +13,15 @@ import { ValidationWarningsPanel } from "./validation-warnings-panel";
 import { SettlementProvider } from "@/lib/settlement/store";
 import { Button } from "@/components/ui/button";
 
+function SectionHeading({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <h2 className={`flex items-center gap-2 text-lg font-semibold tracking-tight ${className}`}>
+      <span aria-hidden className="h-5 w-1 rounded-full bg-primary" />
+      {children}
+    </h2>
+  );
+}
+
 function SettlementCalculatorScreen() {
   const [trainingMode, setTrainingMode] = useState(false);
 
@@ -45,31 +54,31 @@ function SettlementCalculatorScreen() {
       <MatterSetupSection />
 
       <section className="grid gap-2 print:hidden">
-        <h2 className="text-lg font-semibold">Adjustments</h2>
+        <SectionHeading>Adjustments</SectionHeading>
         <AdjustmentList trainingMode={trainingMode} />
       </section>
 
       <section className="grid gap-2 print:hidden">
-        <h2 className="text-lg font-semibold">Settlement Costs</h2>
+        <SectionHeading>Settlement Costs</SectionHeading>
         <SettlementCostsSection />
       </section>
 
       <hr className="print:hidden" />
 
       <section className="grid gap-2">
-        <h2 className="text-lg font-semibold print:hidden">Calculation Summary</h2>
+        <SectionHeading className="print:hidden">Calculation Summary</SectionHeading>
         <CalculationSummary />
       </section>
 
       <hr className="print:hidden" />
 
       <section className="grid gap-2">
-        <h2 className="text-lg font-semibold print:hidden">Settlement Statement</h2>
+        <SectionHeading className="print:hidden">Settlement Statement</SectionHeading>
         <SettlementStatementView />
       </section>
 
       <section className="grid gap-2 print:hidden">
-        <h2 className="text-lg font-semibold">Validation &amp; Warnings</h2>
+        <SectionHeading>Validation &amp; Warnings</SectionHeading>
         <ValidationWarningsPanel />
       </section>
 
