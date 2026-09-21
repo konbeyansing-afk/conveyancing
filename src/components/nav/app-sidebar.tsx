@@ -8,6 +8,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import { UserMenu } from "@/components/nav/user-menu";
 import { navByKey, type NavKey } from "@/components/nav/nav-config";
-import { Circle, GraduationCap } from "lucide-react";
+import { GraduationCap } from "lucide-react";
 
 export function AppSidebar({
   navKey,
@@ -35,13 +36,20 @@ export function AppSidebar({
     .filter((url) => pathname === url || pathname.startsWith(`${url}/`))
     .sort((a, b) => b.length - a.length)[0];
 
+  const groups = items.reduce<[string, typeof items][]>((acc, item) => {
+    const existing = acc.find(([name]) => name === item.group);
+    if (existing) existing[1].push(item);
+    else acc.push([item.group, [item]]);
+    return acc;
+  }, []);
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/" />}>
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-md shadow-primary/30">
                 <GraduationCap className="size-4" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
@@ -55,33 +63,34 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <div className="mt-1 flex items-center gap-1.5 px-2 text-[11px] font-medium tracking-wide text-sidebar-primary uppercase group-data-[collapsible=icon]:hidden">
-          <Circle className="size-2 shrink-0 fill-current" />
-          {roleLabel} workspace
-        </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => {
-                const isActive = item.url === activeUrl;
-                return (
-                  <SidebarMenuItem key={item.url}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      tooltip={item.title}
-                      render={<Link href={item.url} />}
-                    >
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {groups.map(([group, groupItems]) => (
+          <SidebarGroup key={group}>
+            <SidebarGroupLabel className="text-[11px] font-medium tracking-wider text-sidebar-foreground/45 uppercase">
+              {group}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {groupItems.map((item) => {
+                  const isActive = item.url === activeUrl;
+                  return (
+                    <SidebarMenuItem key={item.url}>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        tooltip={item.title}
+                        render={<Link href={item.url} aria-current={isActive ? "page" : undefined} />}
+                      >
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>

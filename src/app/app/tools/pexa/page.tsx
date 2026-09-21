@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PexaWorkbench } from "@/components/pexa/pexa-workbench";
 import { PageHeader } from "@/components/page-header";
+import { TrainingModeBanner } from "@/components/simulator/training-mode-banner";
 
 export const metadata: Metadata = {
   title: "PEXA Simulator",
@@ -13,6 +14,7 @@ export default function PexaSimulatorPage() {
         title="PEXA Simulator"
         description="A safe replica of the electronic settlement platform. Practise workspaces, participants, documents and the Financial Settlement Schedule — no funds move and nothing is lodged."
       />
+      <TrainingModeBanner system="PEXA" />
       <PexaWorkbench />
     </div>
   );
