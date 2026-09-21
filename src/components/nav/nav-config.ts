@@ -49,7 +49,7 @@ export const traineeNav: NavItem[] = [
   { title: "Training Journey", url: "/app/journey", icon: Route, group: "Training" },
   { title: "My Courses", url: "/app/courses", icon: BookOpen, group: "Training" },
   { title: "Certificates", url: "/app/certificates", icon: Award, group: "Training" },
-  { title: "Resource Library", url: "/app/resources", icon: Library, group: "Library" },
+  { title: "Learning Library", url: "/app/resources", icon: Library, group: "Library" },
   { title: "Settlement Calculator", url: "/app/tools/settlement-calculator", icon: Calculator, group: "Tools" },
   { title: "Practice System", url: "/app/tools/practice-system", icon: MonitorSmartphone, group: "Tools" },
   { title: "PEXA Simulator", url: "/app/tools/pexa", icon: Landmark, group: "Tools" },
