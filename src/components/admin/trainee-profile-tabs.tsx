@@ -257,7 +257,7 @@ export function TraineeProfileTabs({
                     </Badge>
                     {a.latestAttemptId && (
                       <Link
-                        href={`/admin/assessments/${a.quizId}/attempts/${a.latestAttemptId}`}
+                        href={`/admin/assessments/${a.quizId}/attempts/${a.latestAttemptId}?from=${traineeId}`}
                         className="shrink-0 text-xs font-medium text-primary hover:underline"
                       >
                         View
@@ -282,7 +282,7 @@ export function TraineeProfileTabs({
           ) : (
             <div className="grid gap-2">
               {attempts.map((attempt) => (
-                <Link key={attempt.id} href={`/admin/assessments/${attempt.quizId}/attempts/${attempt.id}`}>
+                <Link key={attempt.id} href={`/admin/assessments/${attempt.quizId}/attempts/${attempt.id}?from=${traineeId}`}>
                   <Card className="transition-colors hover:bg-muted/50">
                     <CardContent className="flex flex-wrap items-center gap-3">
                       <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
