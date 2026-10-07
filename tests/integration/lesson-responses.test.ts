@@ -23,7 +23,9 @@ vi.mock("@/auth", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 
-const { saveLessonResponses, MAX_RESPONSE_LENGTH } = await import("@/lib/actions/lesson-responses");
+import { MAX_RESPONSE_LENGTH } from "@/lib/lesson-fields";
+
+const { saveLessonResponses } = await import("@/lib/actions/lesson-responses");
 
 let trainee: Awaited<ReturnType<typeof createUser>>;
 let otherTrainee: Awaited<ReturnType<typeof createUser>>;

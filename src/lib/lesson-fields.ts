@@ -15,6 +15,9 @@
 
 export type FieldChange = { key: string; label: string; value: string };
 
+/** The longest answer the server will store for one field. */
+export const MAX_RESPONSE_LENGTH = 5000;
+
 const TRAINER_STEP = /trainer|assessment record|progression recommendation/i;
 
 export function isTraineeFillableStep(title: string): boolean {

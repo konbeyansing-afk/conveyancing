@@ -5,10 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { canPreviewUnpublished } from "@/lib/can-preview-unpublished";
 import { isEnrolledInCourse } from "@/lib/is-enrolled-in-course";
 import { isStageUnlockedForUser, isCoursePublished } from "@/lib/stage-access";
+import { MAX_RESPONSE_LENGTH } from "@/lib/lesson-fields";
 
 export type SaveLessonResponsesResult = { ok: boolean; error?: string };
 
-export const MAX_RESPONSE_LENGTH = 5000;
 const MAX_BATCH = 100;
 const FIELD_KEY = /^s\d{1,3}-(cell|blank|box)-\d{1,4}$/;
 
