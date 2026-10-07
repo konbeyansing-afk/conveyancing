@@ -39,10 +39,12 @@ function cellLabel(td: Element): string {
   const column = cells.indexOf(td);
   const headerRow = table?.querySelector("tr") ?? null;
   const header = headerRow && headerRow !== row ? clean(headerRow.children[column]?.textContent ?? "") : "";
-  const rowText = cells
-    .filter((c) => c !== td)
-    .map((c) => clean(c.textContent ?? ""))
-    .find(Boolean);
+  const rowText =
+    cells
+      .filter((c) => c !== td)
+      .map((c) => clean(c.textContent ?? ""))
+      .filter(Boolean)
+      .join(" · ") || undefined;
   const rowIndex = table && row ? Array.from(table.querySelectorAll("tr")).indexOf(row as HTMLTableRowElement) : 0;
   return tidyLabel([rowText ?? `Row ${rowIndex}`, header].filter(Boolean).join(" — "));
 }

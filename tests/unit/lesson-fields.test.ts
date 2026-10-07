@@ -50,6 +50,15 @@ describe("Empty table cells", () => {
     expect(changes).toEqual([{ key: "s4-cell-2", label: "Fixed row — Action", value: "Read the contract again" }]);
   });
 
+  it("label a cell by every other filled cell in its row, so a numbered term is not lost", () => {
+    const { container, changes } = setup(`<table><tbody>
+      <tr><th><p>#</p></th><th><p>Term</p></th><th><p>Your Answer</p></th></tr>
+      <tr><td><p>1</p></td><td><p>Mortgagee</p></td><td><p></p></td></tr>
+    </tbody></table>`);
+    type(container.querySelector("textarea")!, "C");
+    expect(changes[0].label).toBe("1 · Mortgagee — Your Answer");
+  });
+
   it("label an all-empty row by its position", () => {
     const { container, changes } = setup(table);
     type(container.querySelector("textarea")!, "x");
