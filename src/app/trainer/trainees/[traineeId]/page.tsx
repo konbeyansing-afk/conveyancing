@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Award, BookOpen, CheckCircle2, ClipboardCheck, Lock } from "lucide-react";
+import { Award, BookOpen, CheckCircle2, ClipboardCheck, Lock, PenLine } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { findScopedTrainee } from "@/lib/trainer-scope";
@@ -39,7 +39,7 @@ export default async function TrainerTraineeDetailPage({
   const program = await getPrimaryProgramForUser(trainee.id);
   const stages = program ? await getJourneyForUser(program.id, trainee.id) : [];
 
-  const [approvals, attempts, notes, certificates, awaitingLessonSignOff] = await Promise.all([
+  const [approvals, attempts, notes, certificates, awaitingLessonSignOff, writtenAnswers] = await Promise.all([
     prisma.stageApproval.findMany({
       where: { userId: trainee.id },
       select: {
@@ -72,7 +72,26 @@ export default async function TrainerTraineeDetailPage({
       orderBy: { traineeSignedAt: "desc" },
       include: { lesson: { select: { id: true, title: true, module: { select: { course: { select: { id: true, title: true } } } } } } },
     }),
+    // Fill-in fields a trainee has typed into inside lessons — see src/lib/actions/lesson-responses.ts.
+    prisma.lessonResponse.findMany({
+      where: { userId: trainee.id },
+      select: {
+        updatedAt: true,
+        lesson: { select: { id: true, title: true, module: { select: { course: { select: { id: true, title: true } } } } } },
+      },
+    }),
   ]);
+
+  const answeredLessons = [
+    ...writtenAnswers
+      .reduce((map, r) => {
+        const entry = map.get(r.lesson.id) ?? { lesson: r.lesson, count: 0, updatedAt: r.updatedAt };
+        entry.count += 1;
+        if (r.updatedAt > entry.updatedAt) entry.updatedAt = r.updatedAt;
+        return map.set(r.lesson.id, entry);
+      }, new Map<string, { lesson: (typeof writtenAnswers)[number]["lesson"]; count: number; updatedAt: Date }>())
+      .values(),
+  ].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
   const approvedStageIds = new Set(approvals.map((a) => a.stageId));
   const completedStages = stages.filter((s) => s.status === "completed").length;
@@ -218,6 +237,43 @@ export default async function TrainerTraineeDetailPage({
                     </div>
                     <Badge variant={attempt.passed ? "default" : "destructive"}>
                       {attempt.score}%
+                    </Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <PenLine className="size-4 text-primary" />
+            Written answers
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {answeredLessons.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing written yet. Answers typed into a lesson&apos;s fill-in fields appear here.
+            </p>
+          ) : (
+            <ul className="grid gap-2">
+              {answeredLessons.map(({ lesson, count, updatedAt }) => (
+                <li key={lesson.id}>
+                  <Link
+                    href={`/trainer/trainees/${trainee.id}/courses/${lesson.module.course.id}/lessons/${lesson.id}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 hover:bg-muted/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{lesson.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {lesson.module.course.title} · updated {shortDate(updatedAt)}
+                      </p>
+                    </div>
+                    <Badge variant="outline">
+                      {count} answer{count === 1 ? "" : "s"}
                     </Badge>
                   </Link>
                 </li>

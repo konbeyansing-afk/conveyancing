@@ -152,6 +152,7 @@ model User {
   settlementCalculationsFinalised SettlementCalculation[] @relation("SettlementCalcFinalisedBy")
   lessonSignOffs         LessonSignOff[]     @relation("LessonSignOffTrainee")
   lessonSignOffsGranted  LessonSignOff[]     @relation("LessonSignOffTrainer")
+  lessonResponses        LessonResponse[]
 }
 
 /**
@@ -458,6 +459,7 @@ model Lesson {
   quiz                  Quiz?
   progress              LessonProgress[]
   signOffs              LessonSignOff[]
+  responses             LessonResponse[]
 
   @@unique([moduleId, slug])
 }
@@ -514,6 +516,29 @@ model LessonSignOff {
   updatedAt       DateTime       @updatedAt
 
   @@unique([lessonId, userId])
+}
+
+/**
+ * What a trainee typed into a fill-in field inside a lesson's content (a table
+ * cell, a blank line, a checkbox) — kept so a trainer can read it back. The
+ * lesson content itself is never modified: fields are discovered in the
+ * rendered content, and fieldKey is derived from their position in it, with
+ * label snapshotting what the field was asking at the time it was saved.
+ */
+model LessonResponse {
+  id        String   @id @default(cuid())
+  lessonId  String
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fieldKey  String
+  label     String
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([lessonId, userId, fieldKey])
+  @@index([userId])
 }
 
 model LessonAttachment {

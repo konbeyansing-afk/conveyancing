@@ -369,3 +369,55 @@
     display: none;
   }
 }
+
+/* ---- Fill-in fields inside lesson slides (see src/lib/lesson-fields.ts) ---- */
+
+.lesson-slide-body .lesson-field {
+  border: 1px solid var(--deck-border);
+  border-radius: 0.5rem;
+  background: var(--deck-surface);
+  color: var(--deck-ink);
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.375rem 0.625rem;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+.lesson-slide-body .lesson-field:hover {
+  border-color: color-mix(in srgb, var(--deck-accent) 45%, var(--deck-border));
+}
+.lesson-slide-body .lesson-field:focus-visible {
+  outline: none;
+  border-color: var(--deck-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--deck-accent) 25%, transparent);
+}
+.lesson-slide-body textarea.lesson-field {
+  display: block;
+  width: 100%;
+  min-height: 2.25rem;
+  resize: vertical;
+  field-sizing: content;
+}
+.lesson-slide-body input.lesson-field-inline {
+  display: inline-block;
+  margin: 0 0.25rem;
+  max-width: 100%;
+  vertical-align: baseline;
+}
+.lesson-slide-body input[type="checkbox"].lesson-field {
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  margin-right: 0.4rem;
+  vertical-align: -0.15em;
+  accent-color: var(--deck-accent);
+}
+.lesson-slide-body td:has(> textarea.lesson-field) {
+  padding: 0.25rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lesson-slide-body .lesson-field {
+    transition: none;
+  }
+}

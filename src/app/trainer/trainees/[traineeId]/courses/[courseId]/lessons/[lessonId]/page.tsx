@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { findScopedTrainee } from "@/lib/trainer-scope";
 import { lessonContentToHtml } from "@/components/lesson-content/lesson-content-html";
 import { TrainerSignOffForm } from "@/components/trainer/trainer-sign-off-form";
+import { LessonResponsesCard } from "@/components/trainer/lesson-responses-card";
+import { splitIntoSteps } from "@/lib/tiptap/split-into-steps";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import type { JSONContent } from "@tiptap/core";
@@ -40,7 +42,7 @@ export default async function TrainerTraineeLessonPage({
   const course = lesson?.module.course;
   if (!lesson || !course || course.id !== courseId) notFound();
 
-  const [progress, quizAttempt, signOff] = await Promise.all([
+  const [progress, quizAttempt, signOff, responses] = await Promise.all([
     prisma.lessonProgress.findUnique({
       where: { userId_lessonId: { userId: trainee.id, lessonId } },
       select: { completedAt: true },
@@ -52,9 +54,14 @@ export default async function TrainerTraineeLessonPage({
         })
       : null,
     prisma.lessonSignOff.findUnique({ where: { lessonId_userId: { lessonId, userId: trainee.id } } }),
+    prisma.lessonResponse.findMany({
+      where: { lessonId, userId: trainee.id },
+      select: { fieldKey: true, label: true, value: true, updatedAt: true },
+    }),
   ]);
 
   const html = lessonContentToHtml(lesson.content as JSONContent | null);
+  const stepTitles = splitIntoSteps(lesson.content as JSONContent | null).map((s) => s.title);
 
   return (
     <div className="grid gap-6">
@@ -104,6 +111,8 @@ export default async function TrainerTraineeLessonPage({
           )}
         </CardContent>
       </Card>
+
+      <LessonResponsesCard traineeName={trainee.name} rows={responses} stepTitles={stepTitles} />
 
       <Card>
         <CardContent className="lesson-content pt-6" dangerouslySetInnerHTML={{ __html: html }} />

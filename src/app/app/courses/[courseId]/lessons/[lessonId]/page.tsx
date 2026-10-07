@@ -7,6 +7,7 @@ import { splitIntoSteps } from "@/lib/tiptap/split-into-steps";
 import { findNextLesson } from "@/lib/next-lesson";
 import { markLessonComplete } from "@/lib/actions/progress";
 import { submitTraineeSignOff } from "@/lib/actions/lesson-signoff";
+import { saveLessonResponses } from "@/lib/actions/lesson-responses";
 import { canPreviewUnpublished } from "@/lib/can-preview-unpublished";
 import { isEnrolledInCourse } from "@/lib/is-enrolled-in-course";
 import { isStageUnlockedForUser, isCoursePublished } from "@/lib/stage-access";
@@ -70,7 +71,7 @@ export default async function TraineeLessonPage({
   const completeAction = markLessonComplete.bind(null, lesson.id);
   const signOffAction = submitTraineeSignOff.bind(null, lesson.id);
 
-  const [signOffRow, progressRow] = await Promise.all([
+  const [signOffRow, progressRow, responseRows] = await Promise.all([
     lesson.requiresSignOff && userId
       ? prisma.lessonSignOff.findUnique({
           where: { lessonId_userId: { lessonId: lesson.id, userId } },
@@ -83,6 +84,12 @@ export default async function TraineeLessonPage({
           select: { completedAt: true },
         })
       : Promise.resolve(null),
+    userId
+      ? prisma.lessonResponse.findMany({
+          where: { lessonId: lesson.id, userId },
+          select: { fieldKey: true, value: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const next = findNextLesson(course.modules, lesson.module.id, lesson.id);
@@ -119,6 +126,8 @@ export default async function TraineeLessonPage({
           : null
       }
       onSubmitSignOff={signOffAction}
+      lessonResponses={Object.fromEntries(responseRows.map((r) => [r.fieldKey, r.value]))}
+      onSaveResponses={saveLessonResponses.bind(null, lesson.id)}
       jurisdiction={jurisdiction}
       stageTitle={course.stage?.title ?? null}
       estimatedMinutes={lesson.estimatedMinutes}

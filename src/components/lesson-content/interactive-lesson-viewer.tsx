@@ -28,12 +28,14 @@ import { Button } from "@/components/ui/button";
 import { SignOffPanel, type SignOffState } from "@/components/lesson-content/sign-off-panel";
 import { JurisdictionBadge, LessonIntroScreen, type LessonProgressState } from "@/components/lesson-content/lesson-intro-screen";
 import { classifySlideFlavor, type SlideFlavor } from "@/lib/lesson-slide-flavor";
+import { isTraineeFillableStep, makeFieldsFillable, type FieldChange } from "@/lib/lesson-fields";
 
 type Step = { title: string; html: string };
 type Resource = { id: string; title: string; url: string; fileType: string };
 type SignOffActionResult = { error?: string; success?: string } | null;
 type QuizMeta = { title: string; questionCount: number; passingScore: number };
 type CompleteReason = "quiz_required" | "stage_locked" | "signoff_required";
+type SaveResponses = (entries: FieldChange[]) => Promise<{ ok: boolean; error?: string }>;
 
 const FLAVOR_META: Record<SlideFlavor, { label: string; icon: typeof BookOpen; accent: string; accentSoft: string }> = {
   objectives: { label: "Objectives", icon: Target, accent: "var(--deck-accent)", accentSoft: "var(--deck-accent-soft)" },
@@ -94,6 +96,8 @@ export function InteractiveLessonViewer({
   progressState = "not_started",
   nextLessonHref = null,
   nextLessonTitle = null,
+  lessonResponses = {},
+  onSaveResponses,
 }: {
   steps: Step[];
   lessonTitle: string;
@@ -123,6 +127,10 @@ export function InteractiveLessonViewer({
   progressState?: LessonProgressState;
   nextLessonHref?: string | null;
   nextLessonTitle?: string | null;
+  /** What this trainee already typed into the lesson's fill-in fields, keyed by field. */
+  lessonResponses?: Record<string, string>;
+  /** Absent in the Lesson Builder preview, where fields can be typed into but nothing is stored. */
+  onSaveResponses?: SaveResponses;
 }) {
   const totalSteps = steps.length;
   const hasQuizBridge = !!quizHref;
@@ -435,6 +443,9 @@ export function InteractiveLessonViewer({
                 ) : (
                   <StepSlide
                     step={currentStep!}
+                    stepIndex={realStepIndex}
+                    savedResponses={lessonResponses}
+                    onSaveResponses={onSaveResponses}
                     flavorMeta={flavorMeta}
                     showSignOff={realStepIndex === totalSteps - 1 && requiresSignOff && !!onSubmitSignOff}
                     signOff={signOff}
@@ -653,14 +664,23 @@ function CompletionSlide({
   );
 }
 
+/** Cheap check on the HTML string so the "answers save automatically" note only shows where there is something to fill in. */
+const HAS_FIELDS = /_{4,}|☐|<td[^>]*>(\s*<p>\s*<\/p>)?\s*<\/td>/;
+
 function StepSlide({
   step,
+  stepIndex,
+  savedResponses,
+  onSaveResponses,
   flavorMeta,
   showSignOff,
   signOff,
   onSubmitSignOff,
 }: {
   step: Step;
+  stepIndex: number;
+  savedResponses: Record<string, string>;
+  onSaveResponses?: SaveResponses;
   flavorMeta: (typeof FLAVOR_META)[SlideFlavor];
   showSignOff: boolean;
   signOff: SignOffState;
@@ -668,46 +688,94 @@ function StepSlide({
 }) {
   const focusTarget = useFocusOnMount<HTMLHeadingElement>();
   const contentRef = useRef<HTMLDivElement>(null);
+  const saveRef = useRef(onSaveResponses);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const fillable = isTraineeFillableStep(step.title);
+  const hasFields = fillable && HAS_FIELDS.test(step.html);
 
-  // Scratchpad answer boxes: under each numbered question in reflection/scenario/exercise
-  // sections, so trainees can think out loud as they read. Not saved anywhere on purpose.
-  // Mount-once (this component itself remounts fresh per slide, so `step` never changes
-  // across the lifetime of one instance) — deliberately not tied to the outer viewer's
-  // `slide` state, since AnimatePresence's mode="wait" defers the real DOM commit for an
-  // incoming slide and an outer-state-driven effect can fire before the container exists.
+  useEffect(() => {
+    saveRef.current = onSaveResponses;
+  });
+
+  // Everything that mutates the rendered content lives in this one mount-once effect, so a
+  // single cleanup can put the original markup back (dev-mode double invocation, leaving the
+  // slide). It is mount-once on purpose: this component remounts per slide, and an effect
+  // driven by the outer viewer's `slide` state can fire before AnimatePresence's mode="wait"
+  // has committed the incoming slide's DOM.
   useEffect(() => {
     const container = contentRef.current;
-    if (!container || !/reflection|practical scenario|practical exercise/i.test(step.title)) return;
+    if (!container) return;
+    const original = container.innerHTML;
 
-    const paragraphs = Array.from(container.querySelectorAll(":scope > p"));
-    const inserted: HTMLElement[] = [];
-    for (const p of paragraphs) {
-      const text = p.textContent?.trim() ?? "";
-      if (!/^\d+[.)]\s*\S/.test(text)) continue;
+    const pending = new Map<string, FieldChange>();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let active = true;
 
-      const wrapper = document.createElement("div");
-      wrapper.className = "deck-scratch-answer mt-2 mb-4";
-      wrapper.style.cssText = "margin-top: 0.5rem; margin-bottom: 1rem;";
+    const flush = async () => {
+      clearTimeout(timer);
+      const batch = [...pending.values()];
+      pending.clear();
+      const save = saveRef.current;
+      if (batch.length === 0 || !save) return;
+      let ok = false;
+      try {
+        ok = (await save(batch)).ok;
+      } catch {
+        ok = false;
+      }
+      if (!ok) {
+        // Keep what failed so the next edit (or leaving the slide) retries it, unless it was retyped since.
+        for (const entry of batch) if (!pending.has(entry.key)) pending.set(entry.key, entry);
+      }
+      if (active) setSaveState(ok ? "saved" : "error");
+    };
 
-      const label = document.createElement("label");
-      label.textContent = "Jot your answer";
-      label.style.cssText =
-        "display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; color: var(--deck-ink-soft);";
+    if (fillable) {
+      makeFieldsFillable(container, {
+        stepIndex,
+        saved: savedResponses,
+        onChange: (change) => {
+          if (!saveRef.current) return;
+          pending.set(change.key, change);
+          setSaveState("saving");
+          clearTimeout(timer);
+          timer = setTimeout(flush, 700);
+        },
+      });
+    }
 
-      const textarea = document.createElement("textarea");
-      textarea.rows = 3;
-      textarea.placeholder = "Type your thinking here — this is just for you, it isn't saved.";
-      textarea.style.cssText =
-        "width: 100%; border-radius: 0.5rem; border: 1px solid var(--deck-border); background: var(--deck-surface-sunken); padding: 0.5rem 0.75rem; font-size: 0.875rem; color: var(--deck-ink); resize: vertical;";
+    // Scratchpad answer boxes: under each numbered question in reflection/scenario/exercise
+    // sections, so trainees can think out loud as they read. Not saved anywhere on purpose.
+    if (/reflection|practical scenario|practical exercise/i.test(step.title)) {
+      for (const p of Array.from(container.querySelectorAll(":scope > p"))) {
+        const text = p.textContent?.trim() ?? "";
+        if (!/^\d+[.)]\s*\S/.test(text)) continue;
 
-      wrapper.appendChild(label);
-      wrapper.appendChild(textarea);
-      p.insertAdjacentElement("afterend", wrapper);
-      inserted.push(wrapper);
+        const wrapper = document.createElement("div");
+        wrapper.className = "deck-scratch-answer mt-2 mb-4";
+        wrapper.style.cssText = "margin-top: 0.5rem; margin-bottom: 1rem;";
+
+        const label = document.createElement("label");
+        label.textContent = "Jot your answer";
+        label.style.cssText =
+          "display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; color: var(--deck-ink-soft);";
+
+        const textarea = document.createElement("textarea");
+        textarea.rows = 3;
+        textarea.placeholder = "Type your thinking here — this is just for you, it isn't saved.";
+        textarea.style.cssText =
+          "width: 100%; border-radius: 0.5rem; border: 1px solid var(--deck-border); background: var(--deck-surface-sunken); padding: 0.5rem 0.75rem; font-size: 0.875rem; color: var(--deck-ink); resize: vertical;";
+
+        wrapper.appendChild(label);
+        wrapper.appendChild(textarea);
+        p.insertAdjacentElement("afterend", wrapper);
+      }
     }
 
     return () => {
-      for (const el of inserted) el.remove();
+      active = false;
+      void flush();
+      container.innerHTML = original;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -725,6 +793,24 @@ function StepSlide({
           the slide title (see split-into-steps.ts) — hidden here via CSS so it isn't
           printed twice, without altering the stored content or the shared HTML renderer. */}
       <div ref={contentRef} className="lesson-content lesson-slide-body mt-4" dangerouslySetInnerHTML={{ __html: step.html }} />
+
+      {hasFields && (
+        <p
+          role="status"
+          aria-live="polite"
+          className={`mt-4 text-xs ${saveState === "error" ? "font-medium text-destructive" : "text-muted-foreground"}`}
+        >
+          {!onSaveResponses
+            ? "Preview — fields can be typed into here, but nothing is saved."
+            : saveState === "saving"
+              ? "Saving…"
+              : saveState === "saved"
+                ? "✓ Saved"
+                : saveState === "error"
+                  ? "Couldn't save — check your connection and keep typing to try again."
+                  : "Your answers save automatically."}
+        </p>
+      )}
 
       {showSignOff && onSubmitSignOff && <SignOffPanel signOff={signOff} action={onSubmitSignOff} />}
     </>
