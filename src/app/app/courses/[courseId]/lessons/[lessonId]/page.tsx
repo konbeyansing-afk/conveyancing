@@ -87,7 +87,7 @@ export default async function TraineeLessonPage({
     userId
       ? prisma.lessonResponse.findMany({
           where: { lessonId: lesson.id, userId },
-          select: { fieldKey: true, value: true },
+          select: { fieldKey: true, fieldId: true, label: true, value: true, createdAt: true },
         })
       : Promise.resolve([]),
   ]);
@@ -126,7 +126,19 @@ export default async function TraineeLessonPage({
           : null
       }
       onSubmitSignOff={signOffAction}
-      lessonResponses={Object.fromEntries(responseRows.map((r) => [r.fieldKey, r.value]))}
+      lessonResponses={Object.fromEntries(
+        responseRows.map((r) => [
+          r.fieldKey,
+          {
+            value: r.value,
+            label: r.label,
+            // An answer under a legacy positional key belongs to the field at that position only
+            // while the lesson has not been edited since it was saved; otherwise the viewer
+            // requires the stored question text to still match.
+            trusted: r.fieldId !== null || lesson.updatedAt <= r.createdAt,
+          },
+        ]),
+      )}
       onSaveResponses={saveLessonResponses.bind(null, lesson.id)}
       jurisdiction={jurisdiction}
       stageTitle={course.stage?.title ?? null}

@@ -28,7 +28,13 @@ import { Button } from "@/components/ui/button";
 import { SignOffPanel, type SignOffState } from "@/components/lesson-content/sign-off-panel";
 import { JurisdictionBadge, LessonIntroScreen, type LessonProgressState } from "@/components/lesson-content/lesson-intro-screen";
 import { classifySlideFlavor, type SlideFlavor } from "@/lib/lesson-slide-flavor";
-import { isAnswerStep, isTraineeFillableStep, makeFieldsFillable, type FieldChange } from "@/lib/lesson-fields";
+import {
+  isAnswerStep,
+  isTraineeFillableStep,
+  makeFieldsFillable,
+  type FieldChange,
+  type SavedAnswer,
+} from "@/lib/lesson-fields";
 
 type Step = { title: string; html: string };
 type Resource = { id: string; title: string; url: string; fileType: string };
@@ -128,7 +134,7 @@ export function InteractiveLessonViewer({
   nextLessonHref?: string | null;
   nextLessonTitle?: string | null;
   /** What this trainee already typed into the lesson's fill-in fields, keyed by field. */
-  lessonResponses?: Record<string, string>;
+  lessonResponses?: Record<string, SavedAnswer>;
   /** Absent in the Lesson Builder preview, where fields can be typed into but nothing is stored. */
   onSaveResponses?: SaveResponses;
 }) {
@@ -453,6 +459,7 @@ export function InteractiveLessonViewer({
                   <StepSlide
                     step={currentStep!}
                     stepIndex={realStepIndex}
+                    stepOccurrence={steps.slice(0, realStepIndex).filter((s) => s.title === currentStep!.title).length}
                     savedResponses={lessonResponses}
                     onSaveResponses={onSaveResponses}
                     flavorMeta={flavorMeta}
@@ -679,6 +686,7 @@ const HAS_FIELDS = /_{4,}|☐|<td[^>]*>(\s*<p>\s*<\/p>)?\s*<\/td>/;
 function StepSlide({
   step,
   stepIndex,
+  stepOccurrence,
   savedResponses,
   onSaveResponses,
   flavorMeta,
@@ -688,7 +696,8 @@ function StepSlide({
 }: {
   step: Step;
   stepIndex: number;
-  savedResponses: Record<string, string>;
+  stepOccurrence: number;
+  savedResponses: Record<string, SavedAnswer>;
   onSaveResponses?: SaveResponses;
   flavorMeta: (typeof FLAVOR_META)[SlideFlavor];
   showSignOff: boolean;
@@ -743,6 +752,8 @@ function StepSlide({
     if (fillable) {
       makeFieldsFillable(container, {
         stepIndex,
+        stepTitle: step.title,
+        stepOccurrence,
         saved: savedResponses,
         answerStep,
         onChange: (change) => {

@@ -56,7 +56,16 @@ export default async function TrainerTraineeLessonPage({
     prisma.lessonSignOff.findUnique({ where: { lessonId_userId: { lessonId, userId: trainee.id } } }),
     prisma.lessonResponse.findMany({
       where: { lessonId, userId: trainee.id },
-      select: { fieldKey: true, label: true, value: true, updatedAt: true },
+      select: {
+        fieldKey: true,
+        label: true,
+        value: true,
+        updatedAt: true,
+        section: true,
+        position: true,
+        needsReview: true,
+        reviewNote: true,
+      },
     }),
   ]);
 

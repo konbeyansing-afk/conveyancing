@@ -524,18 +524,36 @@ model LessonSignOff {
  * lesson content itself is never modified: fields are discovered in the
  * rendered content, and fieldKey is derived from their position in it, with
  * label snapshotting what the field was asking at the time it was saved.
+ *
+ * fieldKey is the row's identity within (lesson, user). New rows use a stable key
+ * derived from what the field asks ("f-<hash>", see src/lib/lesson-fields.ts), so
+ * editing other questions never moves an answer. Rows written before that used a
+ * positional key ("s3-cell-2"); backfill re-keys them in place, keeping the old key
+ * in legacyKey, and sets needsReview on any it cannot place with certainty — those
+ * are kept, never reassigned.
  */
 model LessonResponse {
-  id        String   @id @default(cuid())
-  lessonId  String
-  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fieldKey  String
-  label     String
-  value     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fieldKey    String
+  /// Set once the row is keyed by its stable identity; null for rows still on a positional key.
+  fieldId     String?
+  /// The positional key this row was originally saved under (audit / rollback).
+  legacyKey   String?
+  /// Heading of the section the field was in when it was saved.
+  section     String?
+  /// Order of the field within the lesson when it was saved (display order only).
+  position    Int?
+  label       String
+  value       String
+  /// True when the row could not be matched to a current question with certainty.
+  needsReview Boolean  @default(false)
+  reviewNote  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([lessonId, userId, fieldKey])
   @@index([userId])

@@ -5,12 +5,22 @@ import { prisma } from "@/lib/prisma";
 import { canPreviewUnpublished } from "@/lib/can-preview-unpublished";
 import { isEnrolledInCourse } from "@/lib/is-enrolled-in-course";
 import { isStageUnlockedForUser, isCoursePublished } from "@/lib/stage-access";
-import { MAX_RESPONSE_LENGTH } from "@/lib/lesson-fields";
+import { LEGACY_KEY, MAX_RESPONSE_LENGTH, STABLE_KEY } from "@/lib/lesson-fields";
 
 export type SaveLessonResponsesResult = { ok: boolean; error?: string };
 
+export type SaveEntry = {
+  /** Stable field identity ("f-<hash>"); the positional legacy format is still accepted. */
+  key: string;
+  /** Present only when this save adopts an answer stored under the old positional key. */
+  legacyKey?: string;
+  label: string;
+  section?: string;
+  position?: number;
+  value: string;
+};
+
 const MAX_BATCH = 100;
-const FIELD_KEY = /^s\d{1,3}-(cell|blank|box|ans)-\d{1,4}$/;
 
 /**
  * Saves what a trainee typed into a lesson's fill-in fields. Always writes to
@@ -18,11 +28,11 @@ const FIELD_KEY = /^s\d{1,3}-(cell|blank|box|ans)-\d{1,4}$/;
  * applies the same access rules as completing the lesson, so a trainee can't
  * store answers against a lesson they couldn't open. An empty value removes
  * the row rather than keeping a blank one.
+ *
+ * Re-keying never loses an answer: when an edit adopts a legacy positional row,
+ * that row is renamed in place (same record, same history) to the stable key.
  */
-export async function saveLessonResponses(
-  lessonId: string,
-  entries: { key: string; label: string; value: string }[],
-): Promise<SaveLessonResponsesResult> {
+export async function saveLessonResponses(lessonId: string, entries: SaveEntry[]): Promise<SaveLessonResponsesResult> {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return { ok: false, error: "Please sign in again." };
@@ -31,8 +41,13 @@ export async function saveLessonResponses(
     return { ok: false, error: "Nothing to save." };
   }
   for (const entry of entries) {
-    if (typeof entry.key !== "string" || !FIELD_KEY.test(entry.key)) return { ok: false, error: "Invalid field." };
+    const keyOk = typeof entry.key === "string" && (STABLE_KEY.test(entry.key) || LEGACY_KEY.test(entry.key));
+    const legacyOk =
+      entry.legacyKey === undefined || (typeof entry.legacyKey === "string" && LEGACY_KEY.test(entry.legacyKey));
+    if (!keyOk || !legacyOk) return { ok: false, error: "Invalid field." };
     if (typeof entry.value !== "string" || typeof entry.label !== "string") return { ok: false, error: "Invalid field." };
+    if (entry.section !== undefined && typeof entry.section !== "string") return { ok: false, error: "Invalid field." };
+    if (entry.position !== undefined && !Number.isInteger(entry.position)) return { ok: false, error: "Invalid field." };
     if (entry.value.length > MAX_RESPONSE_LENGTH) {
       return { ok: false, error: `Answers can be up to ${MAX_RESPONSE_LENGTH} characters.` };
     }
@@ -73,17 +88,61 @@ export async function saveLessonResponses(
   // Last write per key wins within a batch.
   const latest = new Map(entries.map((e) => [e.key, e]));
 
-  await prisma.$transaction(
-    [...latest.values()].map((entry) =>
-      entry.value === ""
-        ? prisma.lessonResponse.deleteMany({ where: { lessonId, userId, fieldKey: entry.key } })
-        : prisma.lessonResponse.upsert({
-            where: { lessonId_userId_fieldKey: { lessonId, userId, fieldKey: entry.key } },
-            create: { lessonId, userId, fieldKey: entry.key, label: entry.label.slice(0, 200), value: entry.value },
-            update: { label: entry.label.slice(0, 200), value: entry.value },
-          }),
-    ),
-  );
+  for (const entry of latest.values()) {
+    const label = entry.label.slice(0, 200);
+    const section = entry.section?.slice(0, 200) ?? null;
+    const fieldId = STABLE_KEY.test(entry.key) ? entry.key.slice(2) : null;
+
+    if (entry.value === "") {
+      // The trainee cleared the field: remove the row they own for it, under either key.
+      await prisma.lessonResponse.deleteMany({
+        where: {
+          lessonId,
+          userId,
+          fieldKey: { in: entry.legacyKey ? [entry.key, entry.legacyKey] : [entry.key] },
+        },
+      });
+      continue;
+    }
+
+    if (entry.legacyKey) {
+      const alreadyKeyed = await prisma.lessonResponse.findUnique({
+        where: { lessonId_userId_fieldKey: { lessonId, userId, fieldKey: entry.key } },
+        select: { id: true },
+      });
+      if (!alreadyKeyed) {
+        const moved = await prisma.lessonResponse.updateMany({
+          where: { lessonId, userId, fieldKey: entry.legacyKey },
+          data: {
+            fieldKey: entry.key,
+            fieldId,
+            legacyKey: entry.legacyKey,
+            section,
+            position: entry.position ?? null,
+            value: entry.value,
+            needsReview: false,
+            reviewNote: null,
+          },
+        });
+        if (moved.count > 0) continue;
+      }
+    }
+
+    await prisma.lessonResponse.upsert({
+      where: { lessonId_userId_fieldKey: { lessonId, userId, fieldKey: entry.key } },
+      create: {
+        lessonId,
+        userId,
+        fieldKey: entry.key,
+        fieldId,
+        section,
+        position: entry.position ?? null,
+        label,
+        value: entry.value,
+      },
+      update: { value: entry.value, label, section, position: entry.position ?? null },
+    });
+  }
 
   return { ok: true };
 }

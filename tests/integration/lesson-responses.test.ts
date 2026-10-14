@@ -142,3 +142,84 @@ describe("saveLessonResponses", () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe("stable keys and re-keying", () => {
+  const KEY_A = "f-0a1b2c3d4e5f60";
+  const KEY_B = "f-1a1b2c3d4e5f61";
+  const KEY_C = "f-2a1b2c3d4e5f62";
+
+  const find = (userId: string, fieldKey: string) =>
+    prisma.lessonResponse.findUnique({ where: { lessonId_userId_fieldKey: { lessonId, userId, fieldKey } } });
+
+  it("stores a stable key with its section, position and key id", async () => {
+    as(trainee);
+    const result = await saveLessonResponses(lessonId, [
+      { key: KEY_A, label: "Scenario 1 — 1. What is the correct immediate response?", section: "Part G", position: 4, value: "Escalate" },
+    ]);
+    expect(result.ok).toBe(true);
+    const row = await find(trainee.id, KEY_A);
+    expect(row).toMatchObject({ fieldId: KEY_A.slice(2), section: "Part G", position: 4, value: "Escalate", needsReview: false });
+  });
+
+  it("re-keys a legacy row in place: same record, no copy, old key kept for audit", async () => {
+    as(trainee);
+    await saveLessonResponses(lessonId, [{ key: "s6-blank-2", label: "Signature", value: "first draft" }]);
+    const before = await find(trainee.id, "s6-blank-2");
+    expect(before).not.toBeNull();
+
+    const result = await saveLessonResponses(lessonId, [
+      { key: KEY_B, legacyKey: "s6-blank-2", label: "Signature", section: "Acknowledgement", position: 2, value: "final" },
+    ]);
+    expect(result.ok).toBe(true);
+
+    expect(await find(trainee.id, "s6-blank-2")).toBeNull();
+    const after = await find(trainee.id, KEY_B);
+    expect(after?.id).toBe(before!.id);
+    expect(after).toMatchObject({ value: "final", fieldId: KEY_B.slice(2), legacyKey: "s6-blank-2", section: "Acknowledgement" });
+    expect(after!.createdAt.getTime()).toBe(before!.createdAt.getTime());
+  });
+
+  it("keeps a legacy row untouched when the stable key already has an answer", async () => {
+    as(trainee);
+    await saveLessonResponses(lessonId, [
+      { key: "s7-blank-0", label: "Date", value: "legacy value" },
+      { key: KEY_C, label: "Date", value: "current value" },
+    ]);
+    await saveLessonResponses(lessonId, [{ key: KEY_C, legacyKey: "s7-blank-0", label: "Date", value: "edited" }]);
+    expect((await find(trainee.id, "s7-blank-0"))?.value).toBe("legacy value");
+    expect((await find(trainee.id, KEY_C))?.value).toBe("edited");
+  });
+
+  it("removes the answer under either key when the field is cleared", async () => {
+    as(trainee);
+    await saveLessonResponses(lessonId, [{ key: "s8-blank-0", label: "Name", value: "to clear" }]);
+    await saveLessonResponses(lessonId, [{ key: "f-3a1b2c3d4e5f63", legacyKey: "s8-blank-0", label: "Name", value: "" }]);
+    expect(await find(trainee.id, "s8-blank-0")).toBeNull();
+  });
+
+  it("never re-keys another trainee's legacy row", async () => {
+    as(otherTrainee);
+    await saveLessonResponses(lessonId, [{ key: "s9-blank-0", label: "Name", value: "other's answer" }]);
+
+    as(trainee);
+    await saveLessonResponses(lessonId, [
+      { key: "f-4a1b2c3d4e5f64", legacyKey: "s9-blank-0", label: "Name", value: "mine" },
+    ]);
+
+    expect((await find(otherTrainee.id, "s9-blank-0"))?.value).toBe("other's answer");
+    expect(await find(otherTrainee.id, "f-4a1b2c3d4e5f64")).toBeNull();
+    expect((await find(trainee.id, "f-4a1b2c3d4e5f64"))?.value).toBe("mine");
+  });
+
+  it("refuses a malformed stable or legacy key", async () => {
+    as(trainee);
+    for (const entry of [
+      { key: "f-short", label: "x", value: "y" },
+      { key: "f-0a1b2c3d4e5f60", legacyKey: "not-a-key", label: "x", value: "y" },
+      { key: "f-ZZZZZZZZZZZZZZ", label: "x", value: "y" },
+    ]) {
+      const result = await saveLessonResponses(lessonId, [entry]);
+      expect(result.ok, JSON.stringify(entry)).toBe(false);
+    }
+  });
+});

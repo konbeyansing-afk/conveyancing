@@ -13,7 +13,95 @@
  * assessment record, recommendation) are left exactly as printed.
  */
 
-export type FieldChange = { key: string; label: string; value: string };
+/**
+ * What the viewer reports when a trainee edits a field.
+ *
+ * `key` is the field's stable identity (see stableFieldKey): derived from what the
+ * field asks, not from where it sits, so adding, removing or reordering other
+ * questions never moves an answer. `legacyKey` is only present when this edit is
+ * the first save of an answer that was stored under the old positional key, so the
+ * server can re-key that row in place instead of leaving two copies.
+ */
+export type FieldChange = {
+  key: string;
+  legacyKey?: string;
+  label: string;
+  section: string;
+  position: number;
+  value: string;
+};
+
+/** A saved answer as the viewer receives it. `trusted` = known to belong to the field at its legacy position. */
+export type SavedAnswer = { value: string; label?: string; trusted?: boolean };
+
+export type FieldKind = "cell" | "blank" | "box" | "ans";
+
+export type FieldDescriptor = {
+  key: string;
+  legacyKey: string;
+  kind: FieldKind;
+  label: string;
+  section: string;
+  position: number;
+};
+
+/** 53-bit string hash (cyrb53): deterministic and identical in the browser and in Node. */
+function hash53(text: string): number {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+
+/**
+ * Ordinals ("1.", "3)", "7 ·") describe where something currently sits, so they are
+ * left out of the identity: renumbering a list must not make its answers look new.
+ * Digits that are part of a name ("Scenario 4", "Mock File 2") are kept.
+ */
+function normaliseForId(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/[–—]/g, "-")
+    .replace(/^\d+\s·\s/, "")
+    .replace(/(^|\s-\s)\d+[.)]\s+/g, "$1");
+}
+
+/**
+ * The stable identity of a field: a hash of its section, kind, the question it
+ * asks, and which occurrence of that identical question it is. Nothing positional
+ * is in it, so reordering or inserting other questions leaves it unchanged; editing
+ * the question's own text changes it (the old answer is then kept and flagged
+ * rather than silently attached to different wording).
+ */
+export function stableFieldKey(
+  section: string,
+  kind: string,
+  label: string,
+  occurrence: number,
+  sectionOccurrence = 0,
+): string {
+  const input = [
+    normaliseForId(section.replace(/^\d+[.)]\s*/, "")),
+    String(sectionOccurrence),
+    kind,
+    normaliseForId(label),
+    String(occurrence),
+  ].join("\u241f");
+  return `f-${hash53(input).toString(16).padStart(14, "0")}`;
+}
+
+export const STABLE_KEY = /^f-[0-9a-f]{14}$/;
+export const LEGACY_KEY = /^s\d{1,3}-(cell|blank|box|ans)-\d{1,4}$/;
 
 /** The longest answer the server will store for one field. */
 export const MAX_RESPONSE_LENGTH = 5000;
@@ -117,27 +205,69 @@ export function makeFieldsFillable(
   container: HTMLElement,
   opts: {
     stepIndex: number;
-    saved: Record<string, string>;
+    /** The section's heading text; part of every field's stable identity. */
+    stepTitle: string;
+    /** How many earlier sections in the same lesson have this same heading (0 for the first). */
+    stepOccurrence?: number;
+    saved: Record<string, SavedAnswer>;
     onChange: (change: FieldChange) => void;
     /** The section is a written-answer one (see isAnswerStep): give its prompts somewhere to write. */
     answerStep?: boolean;
   },
-): void {
+): FieldDescriptor[] {
   const doc = container.ownerDocument;
   const counters = { cell: 0, blank: 0, box: 0, ans: 0 };
   const nextKey = (kind: keyof typeof counters) => `s${opts.stepIndex}-${kind}-${counters[kind]++}`;
 
-  const bind = (el: HTMLInputElement | HTMLTextAreaElement, key: string, label: string) => {
-    el.setAttribute("aria-label", label || "Your answer");
-    const saved = opts.saved[key];
-    if ((el as HTMLInputElement).type === "checkbox") {
-      const box = el as HTMLInputElement;
-      box.checked = saved === "checked";
-      box.addEventListener("change", () => opts.onChange({ key, label, value: box.checked ? "checked" : "" }));
-    } else {
-      if (saved !== undefined) el.value = saved;
-      el.addEventListener("input", () => opts.onChange({ key, label, value: el.value }));
-    }
+  // Fields are registered as they are created and wired up together once the section
+  // is complete: a stable identity needs to know how many identical questions exist.
+  const registry: { el: HTMLInputElement | HTMLTextAreaElement; legacyKey: string; kind: FieldKind; label: string }[] = [];
+  const bind = (el: HTMLInputElement | HTMLTextAreaElement, legacyKey: string, label: string) => {
+    const kind = legacyKey.split("-")[1] as FieldKind;
+    registry.push({ el, legacyKey, kind, label });
+  };
+
+  const finalize = (): FieldDescriptor[] => {
+    const totals = new Map<string, number>();
+    const slotOf = (r: (typeof registry)[number]) => `${r.kind}|${normaliseForId(r.label)}`;
+    for (const r of registry) totals.set(slotOf(r), (totals.get(slotOf(r)) ?? 0) + 1);
+    const seen = new Map<string, number>();
+
+    return registry.map((r, position) => {
+      const slot = slotOf(r);
+      const occurrence = seen.get(slot) ?? 0;
+      seen.set(slot, occurrence + 1);
+      const key = stableFieldKey(opts.stepTitle, r.kind, r.label, occurrence, opts.stepOccurrence ?? 0);
+      const unique = totals.get(slot) === 1;
+
+      // Prefer the answer stored under this field's own identity. An answer still stored
+      // under the old positional key is only adopted when it is known to belong here:
+      // the lesson has not changed since it was saved, or it carries this very question
+      // text and no other field in the section asks the same thing.
+      let saved = opts.saved[key];
+      let adopted: string | undefined;
+      if (!saved) {
+        const legacy = opts.saved[r.legacyKey];
+        if (legacy && (legacy.trusted || (unique && legacy.label === r.label))) {
+          saved = legacy;
+          adopted = r.legacyKey;
+        }
+      }
+
+      const { el, label } = r;
+      el.setAttribute("aria-label", label || "Your answer");
+      const report = (value: string) =>
+        opts.onChange({ key, legacyKey: adopted, label, section: opts.stepTitle, position, value });
+      if ((el as HTMLInputElement).type === "checkbox") {
+        const box = el as HTMLInputElement;
+        box.checked = saved?.value === "checked";
+        box.addEventListener("change", () => report(box.checked ? "checked" : ""));
+      } else {
+        if (saved) el.value = saved.value;
+        el.addEventListener("input", () => report(el.value));
+      }
+      return { key, legacyKey: r.legacyKey, kind: r.kind, label, section: opts.stepTitle, position };
+    });
   };
 
   const makeTextarea = (rows: number) => {
@@ -215,7 +345,7 @@ export function makeFieldsFillable(
     parent.replaceChild(fragment, text);
   }
 
-  if (!opts.answerStep) return;
+  if (!opts.answerStep) return finalize();
 
   const addAnswers = (after: Element | null, rows: number, items: { caption?: string; label: string }[]) => {
     const row = doc.createElement("div");
@@ -281,4 +411,6 @@ export function makeFieldsFillable(
   if (counters.cell + counters.blank + counters.box + counters.ans === 0) {
     addAnswer(container.lastElementChild, 4, "Your response");
   }
+
+  return finalize();
 }
