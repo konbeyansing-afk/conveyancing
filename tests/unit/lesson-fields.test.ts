@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from "vitest";
-import { isTraineeFillableStep, makeFieldsFillable, type FieldChange } from "@/lib/lesson-fields";
+import { isAnswerStep, isTraineeFillableStep, makeFieldsFillable, type FieldChange } from "@/lib/lesson-fields";
 
-function setup(html: string, saved: Record<string, string> = {}, stepIndex = 4) {
+function setup(html: string, saved: Record<string, string> = {}, stepIndex = 4, answerStep = false) {
   const container = document.createElement("div");
   container.innerHTML = html;
   const changes: FieldChange[] = [];
-  makeFieldsFillable(container, { stepIndex, saved, onChange: (c) => changes.push(c) });
+  makeFieldsFillable(container, { stepIndex, saved, answerStep, onChange: (c) => changes.push(c) });
   return { container, changes };
 }
 
@@ -137,5 +137,107 @@ describe("Restoring saved answers", () => {
     makeFieldsFillable(container, { stepIndex: 0, saved: {}, onChange });
     expect(container.querySelectorAll("input,textarea").length).toBe(0);
     expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("Written-answer sections (assessment parts, scenarios, mock files)", () => {
+  it("recognises them by title and leaves ordinary explanation sections alone", () => {
+    for (const title of [
+      "Part G – Practical Scenarios (10 Scenarios)",
+      "Part D – Process Ordering (5 Exercises)",
+      "Part H – Mock File Exercise",
+      "Reflection Question",
+      "Practical Exercise",
+      "8. Trainee Reflection Activity",
+    ]) {
+      expect(isAnswerStep(title), title).toBe(true);
+    }
+    for (const title of ["Step-by-Step General Workflow", "Key Terminology", "Common Mistakes", "Example", "Competency Checklist"]) {
+      expect(isAnswerStep(title), title).toBe(false);
+    }
+  });
+
+  it("keeps trainer-only material out of the trainee's reach", () => {
+    expect(isTraineeFillableStep("7. Remediation Plan")).toBe(false);
+    expect(isTraineeFillableStep("Answer Key and Marking Guide")).toBe(false);
+  });
+
+  it("gives every numbered scenario question its own box, labelled by the scenario", () => {
+    const { container, changes } = setup(
+      `<h2>Part G – Practical Scenarios</h2>
+       <div data-callout><p><strong>NOTE — Scenario 1 – Matter Opening</strong>A new instruction arrives.</p></div>
+       <p>1. What is the correct immediate response?</p>
+       <p>2. What must the trainee avoid doing?</p>
+       <div data-callout><p><strong>NOTE — Scenario 2 – Conflict Checking</strong>A search returns a match.</p></div>
+       <p>1. What is the correct immediate response?</p>`,
+      {},
+      2,
+      true,
+    );
+    const boxes = container.querySelectorAll("textarea");
+    expect(boxes.length).toBe(3);
+    type(boxes[2], "Escalate it");
+    expect(changes[0]).toEqual({
+      key: "s2-ans-2",
+      label: "Scenario 2 – Conflict Checking — 1. What is the correct immediate response?",
+      value: "Escalate it",
+    });
+  });
+
+  it("puts one box under each list when the section has no numbered prompts", () => {
+    const { container, changes } = setup(
+      `<h2>Part D – Process Ordering</h2><h3>Exercise 1 – Matter Journey</h3><ul><li>Settlement</li><li>Enquiry</li></ul>
+       <h3>Exercise 2 – Conflict Check</h3><ul><li>Record</li><li>Search</li></ul>`,
+      {},
+      1,
+      true,
+    );
+    const boxes = container.querySelectorAll("textarea");
+    expect(boxes.length).toBe(2);
+    type(boxes[1], "Search then record");
+    expect(changes[0].label).toBe("Exercise 2 – Conflict Check — Your answer");
+  });
+
+  it("gives each task a box per case when the tasks are for each of several files", () => {
+    const { container, changes } = setup(
+      `<h2>Part H – Mock File Exercise</h2>
+       <h3>Mock File 1 – Buyer-Side Matter</h3><div data-callout><p><strong>NOTE</strong>Client: Mr Patel</p></div>
+       <h3>Mock File 2 – Seller-Side Matter</h3><div data-callout><p><strong>NOTE</strong>Client: Ms Nguyen</p></div>
+       <p>For each mock file, complete the following tasks:</p>
+       <p>1. Identify the transaction side</p><p>2. Identify missing information</p>`,
+      {},
+      3,
+      true,
+    );
+    const boxes = container.querySelectorAll("textarea");
+    expect(boxes.length).toBe(4);
+    expect(container.textContent).toContain("Mock File 1");
+    type(boxes[1], "Seller");
+    expect(changes[0].label).toBe("Mock File 2 – Seller-Side Matter — 1. Identify the transaction side");
+  });
+
+  it("never leaves a written-answer section without somewhere to write", () => {
+    const { container, changes } = setup(`<h2>Practical Exercise</h2><p>Using a fictional instruction, complete the checklist.</p>`, {}, 5, true);
+    const boxes = container.querySelectorAll("textarea");
+    expect(boxes.length).toBe(1);
+    type(boxes[0], "done");
+    expect(changes[0]).toEqual({ key: "s5-ans-0", label: "Your response", value: "done" });
+  });
+
+  it("does not turn numbered steps in an ordinary section into questions", () => {
+    const { container } = setup(`<h2>Step-by-Step General Workflow</h2><p>1. Receive the instruction</p><p>2. Confirm the details</p>`, {}, 6, false);
+    expect(container.querySelectorAll("textarea,input").length).toBe(0);
+  });
+
+  it("restores saved written answers", () => {
+    const { container } = setup(`<h2>Reflection</h2><p>1. What did you learn?</p>`, { "s1-ans-0": "How to escalate" }, 1, true);
+    expect((container.querySelector("textarea") as HTMLTextAreaElement).value).toBe("How to escalate");
+  });
+
+  it("leaves a table alone when one of its columns belongs to the trainer", () => {
+    const { container } = setup(
+      `<table><tbody><tr><th><p>Trainer Signature</p></th><th><p>Date</p></th></tr><tr><td><p></p></td><td><p></p></td></tr></tbody></table>`,
+    );
+    expect(container.querySelectorAll("textarea").length).toBe(0);
   });
 });

@@ -4,10 +4,10 @@ import { formatRelativeTime } from "@/lib/format-relative-time";
 
 export type LessonResponseRow = { fieldKey: string; label: string; value: string; updatedAt: Date };
 
-const KIND_ORDER: Record<string, number> = { blank: 0, cell: 1, box: 2 };
+const KIND_ORDER: Record<string, number> = { blank: 0, cell: 1, box: 2, ans: 3 };
 
 function parseKey(key: string) {
-  const match = /^s(\d+)-(cell|blank|box)-(\d+)$/.exec(key);
+  const match = /^s(\d+)-(cell|blank|box|ans)-(\d+)$/.exec(key);
   return match ? { step: Number(match[1]), kind: match[2], n: Number(match[3]) } : { step: 0, kind: "blank", n: 0 };
 }
 

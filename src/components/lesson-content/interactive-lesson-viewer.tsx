@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useDragControls, useReducedMotion } from "motion/react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -28,7 +28,7 @@ import { Button } from "@/components/ui/button";
 import { SignOffPanel, type SignOffState } from "@/components/lesson-content/sign-off-panel";
 import { JurisdictionBadge, LessonIntroScreen, type LessonProgressState } from "@/components/lesson-content/lesson-intro-screen";
 import { classifySlideFlavor, type SlideFlavor } from "@/lib/lesson-slide-flavor";
-import { isTraineeFillableStep, makeFieldsFillable, type FieldChange } from "@/lib/lesson-fields";
+import { isAnswerStep, isTraineeFillableStep, makeFieldsFillable, type FieldChange } from "@/lib/lesson-fields";
 
 type Step = { title: string; html: string };
 type Resource = { id: string; title: string; url: string; fileType: string };
@@ -150,6 +150,7 @@ export function InteractiveLessonViewer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
+  const dragControls = useDragControls();
 
   const isTitleSlide = slide === 0;
   const realStepIndex = slide - 1;
@@ -414,6 +415,14 @@ export function InteractiveLessonViewer({
                 exit={prefersReducedMotion ? undefined : "exit"}
                 transition={prefersReducedMotion ? { duration: 0 } : { type: "tween", duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
                 drag={!showComplete && !completing ? "x" : false}
+                dragControls={dragControls}
+                dragListener={false}
+                onPointerDown={(event) => {
+                  // Swiping is for the slide itself: a press inside a form control or link is
+                  // the trainee typing, selecting text or clicking, never a request to change slide.
+                  if ((event.target as HTMLElement).closest("input,textarea,select,button,a,label,[contenteditable]")) return;
+                  dragControls.start(event);
+                }}
                 dragElastic={0.12}
                 dragConstraints={{ left: 0, right: 0 }}
                 onDragEnd={(_event, info) => {
@@ -691,7 +700,8 @@ function StepSlide({
   const saveRef = useRef(onSaveResponses);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const fillable = isTraineeFillableStep(step.title);
-  const hasFields = fillable && HAS_FIELDS.test(step.html);
+  const answerStep = fillable && isAnswerStep(step.title);
+  const hasFields = fillable && (answerStep || HAS_FIELDS.test(step.html));
 
   useEffect(() => {
     saveRef.current = onSaveResponses;
@@ -734,6 +744,7 @@ function StepSlide({
       makeFieldsFillable(container, {
         stepIndex,
         saved: savedResponses,
+        answerStep,
         onChange: (change) => {
           if (!saveRef.current) return;
           pending.set(change.key, change);
@@ -742,34 +753,6 @@ function StepSlide({
           timer = setTimeout(flush, 700);
         },
       });
-    }
-
-    // Scratchpad answer boxes: under each numbered question in reflection/scenario/exercise
-    // sections, so trainees can think out loud as they read. Not saved anywhere on purpose.
-    if (/reflection|practical scenario|practical exercise/i.test(step.title)) {
-      for (const p of Array.from(container.querySelectorAll(":scope > p"))) {
-        const text = p.textContent?.trim() ?? "";
-        if (!/^\d+[.)]\s*\S/.test(text)) continue;
-
-        const wrapper = document.createElement("div");
-        wrapper.className = "deck-scratch-answer mt-2 mb-4";
-        wrapper.style.cssText = "margin-top: 0.5rem; margin-bottom: 1rem;";
-
-        const label = document.createElement("label");
-        label.textContent = "Jot your answer";
-        label.style.cssText =
-          "display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.35rem; color: var(--deck-ink-soft);";
-
-        const textarea = document.createElement("textarea");
-        textarea.rows = 3;
-        textarea.placeholder = "Type your thinking here — this is just for you, it isn't saved.";
-        textarea.style.cssText =
-          "width: 100%; border-radius: 0.5rem; border: 1px solid var(--deck-border); background: var(--deck-surface-sunken); padding: 0.5rem 0.75rem; font-size: 0.875rem; color: var(--deck-ink); resize: vertical;";
-
-        wrapper.appendChild(label);
-        wrapper.appendChild(textarea);
-        p.insertAdjacentElement("afterend", wrapper);
-      }
     }
 
     return () => {

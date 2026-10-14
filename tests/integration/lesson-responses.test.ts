@@ -81,6 +81,17 @@ describe("saveLessonResponses", () => {
     expect(saved.find((r) => r.fieldKey === "s2-blank-0")?.label).toBe("Signature");
   });
 
+  it("stores written answers to assessment prompts, keyed as answers", async () => {
+    as(trainee);
+    const result = await saveLessonResponses(lessonId, [
+      { key: "s4-ans-7", label: "Scenario 3 — 1. What is the correct immediate response?", value: "Stop and escalate to the supervisor" },
+    ]);
+    expect(result.ok).toBe(true);
+    const saved = (await rows(trainee.id)).find((r) => r.fieldKey === "s4-ans-7");
+    expect(saved?.value).toBe("Stop and escalate to the supervisor");
+    expect(saved?.label).toContain("Scenario 3");
+  });
+
   it("updates an existing answer instead of adding a second row", async () => {
     as(trainee);
     await saveLessonResponses(lessonId, [{ key: "s2-blank-0", label: "Signature", value: "Princess Castro" }]);

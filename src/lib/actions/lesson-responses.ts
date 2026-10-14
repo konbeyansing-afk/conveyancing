@@ -10,7 +10,7 @@ import { MAX_RESPONSE_LENGTH } from "@/lib/lesson-fields";
 export type SaveLessonResponsesResult = { ok: boolean; error?: string };
 
 const MAX_BATCH = 100;
-const FIELD_KEY = /^s\d{1,3}-(cell|blank|box)-\d{1,4}$/;
+const FIELD_KEY = /^s\d{1,3}-(cell|blank|box|ans)-\d{1,4}$/;
 
 /**
  * Saves what a trainee typed into a lesson's fill-in fields. Always writes to

@@ -18,10 +18,26 @@ export type FieldChange = { key: string; label: string; value: string };
 /** The longest answer the server will store for one field. */
 export const MAX_RESPONSE_LENGTH = 5000;
 
-const TRAINER_STEP = /trainer|assessment record|progression recommendation/i;
+const TRAINER_STEP =
+  /trainer|assessment record|progression recommendation|answer key|marking guide|remediation plan/i;
+
+/** A table column or label that names the person who completes it: those cells are theirs, not the trainee's. */
+const TRAINER_WORD = /\b(trainer|assessor|supervisor|marker)\b/i;
 
 export function isTraineeFillableStep(title: string): boolean {
   return !TRAINER_STEP.test(title);
+}
+
+/**
+ * Sections whose numbered prompts or lists are questions the trainee answers in
+ * writing (assessment parts, scenarios, exercises, reflections). Deliberately
+ * keyed off the section title: a numbered list in an ordinary explanation
+ * ("Step-by-Step Workflow") is content to read, not something to answer.
+ */
+const ANSWER_STEP = /^part [a-z]\b|scenario|exercise|matching|ordering|identification|mock file|reflection|activity/i;
+
+export function isAnswerStep(title: string): boolean {
+  return ANSWER_STEP.test(title);
 }
 
 const RUN = /(_{4,}|☐)/;
@@ -72,6 +88,26 @@ function blockLabel(el: Element): string {
   return tidyLabel(heading ? `${heading} — ${nearest}` : nearest);
 }
 
+const LABEL_PREFIX = /^(note|warning|tip|important)\s*[—–:-]\s*/i;
+const BARE_LABEL = /^(note|warning|tip|important)$/i;
+
+/** The nearest heading or callout title above a prompt — "Scenario 3 — Identity Discrepancy", "Exercise 2 — ...". */
+function promptContext(el: Element): string {
+  let prev = el.previousElementSibling;
+  while (prev) {
+    if (/^H[1-6]$/.test(prev.tagName)) return tidyLabel(prev.textContent ?? "");
+    if (prev.hasAttribute("data-callout")) {
+      const strong = clean(prev.querySelector("strong")?.textContent ?? "");
+      if (!BARE_LABEL.test(strong)) {
+        const title = strong || clean(prev.textContent ?? "");
+        return tidyLabel(title.replace(LABEL_PREFIX, "").slice(0, 80));
+      }
+    }
+    prev = prev.previousElementSibling;
+  }
+  return "";
+}
+
 function rowLabelFor(el: Element): string {
   const td = el.closest("td");
   return td ? cellLabel(td) : "";
@@ -79,10 +115,16 @@ function rowLabelFor(el: Element): string {
 
 export function makeFieldsFillable(
   container: HTMLElement,
-  opts: { stepIndex: number; saved: Record<string, string>; onChange: (change: FieldChange) => void },
+  opts: {
+    stepIndex: number;
+    saved: Record<string, string>;
+    onChange: (change: FieldChange) => void;
+    /** The section is a written-answer one (see isAnswerStep): give its prompts somewhere to write. */
+    answerStep?: boolean;
+  },
 ): void {
   const doc = container.ownerDocument;
-  const counters = { cell: 0, blank: 0, box: 0 };
+  const counters = { cell: 0, blank: 0, box: 0, ans: 0 };
   const nextKey = (kind: keyof typeof counters) => `s${opts.stepIndex}-${kind}-${counters[kind]++}`;
 
   const bind = (el: HTMLInputElement | HTMLTextAreaElement, key: string, label: string) => {
@@ -107,7 +149,10 @@ export function makeFieldsFillable(
 
   for (const td of Array.from(container.querySelectorAll("td"))) {
     if (clean(td.textContent ?? "") !== "" || td.querySelector("img,input,textarea")) continue;
+    const headerText = clean(td.closest("table")?.querySelector("tr")?.textContent ?? "");
+    if (TRAINER_WORD.test(headerText)) continue;
     const label = cellLabel(td);
+    if (TRAINER_WORD.test(label)) continue;
     const field = makeTextarea(1);
     td.textContent = "";
     td.appendChild(field);
@@ -146,6 +191,10 @@ export function makeFieldsFillable(
           while (sibling && !(preceding = clean(sibling.textContent ?? ""))) sibling = sibling.previousSibling;
           label = tidyLabel(preceding) || rowLabelFor(parent) || blockLabel(parent);
         }
+        if (TRAINER_WORD.test(label)) {
+          fragment.appendChild(doc.createTextNode(part));
+          return;
+        }
         const field = doc.createElement("input");
         field.type = "text";
         field.className = "lesson-field lesson-field-inline";
@@ -164,5 +213,72 @@ export function makeFieldsFillable(
       }
     });
     parent.replaceChild(fragment, text);
+  }
+
+  if (!opts.answerStep) return;
+
+  const addAnswers = (after: Element | null, rows: number, items: { caption?: string; label: string }[]) => {
+    const row = doc.createElement("div");
+    row.className = "lesson-answer-row";
+    for (const item of items) {
+      if (item.caption) {
+        const caption = doc.createElement("p");
+        caption.className = "lesson-answer-caption";
+        caption.textContent = item.caption;
+        row.appendChild(caption);
+      }
+      const field = makeTextarea(rows);
+      field.className = "lesson-field lesson-answer";
+      row.appendChild(field);
+      bind(field, nextKey("ans"), item.label);
+    }
+    if (after) after.insertAdjacentElement("afterend", row);
+    else container.appendChild(row);
+  };
+  const addAnswer = (after: Element | null, rows: number, label: string) => addAnswers(after, rows, [{ label }]);
+
+  // Numbered prompts ("1. What is the correct immediate response?") each get an answer box.
+  const prompts = Array.from(container.querySelectorAll(":scope > p")).filter(
+    (p) => /^\d+[.)]\s*\S/.test(clean(p.textContent ?? "")) && !p.querySelector("input,textarea"),
+  );
+  // "For each mock file, complete the following tasks" is one list of tasks that applies to
+  // several cases, so each task gets a box per case rather than one box shared between them.
+  const first = prompts[0];
+  const cases = first
+    ? Array.from(container.querySelectorAll(":scope > h3, :scope > h4")).filter(
+        (h) => h.compareDocumentPosition(first) & 4 /* DOCUMENT_POSITION_FOLLOWING */,
+      )
+    : [];
+  const perCase = cases.length >= 2 && /^for each\b/i.test(clean(first?.previousElementSibling?.textContent ?? ""));
+
+  for (const p of prompts) {
+    const prompt = clean(p.textContent ?? "");
+    if (perCase) {
+      addAnswers(
+        p,
+        prompt.length <= 60 ? 1 : 2,
+        cases.map((h) => {
+          const title = clean(h.textContent ?? "");
+          return { caption: title.split(/\s[—–-]\s/)[0], label: tidyLabel(`${title} — ${prompt}`) };
+        }),
+      );
+      continue;
+    }
+    const context = promptContext(p);
+    addAnswer(p, prompt.length <= 60 ? 1 : 3, tidyLabel(context ? `${context} — ${prompt}` : prompt));
+  }
+
+  // No numbered prompts: a list here is the thing being answered (an order to put things in,
+  // points to identify), so one box under each list.
+  if (prompts.length === 0) {
+    for (const list of Array.from(container.querySelectorAll(":scope > ul, :scope > ol"))) {
+      const context = promptContext(list);
+      addAnswer(list, 4, tidyLabel(context ? `${context} — Your answer` : "Your answer"));
+    }
+  }
+
+  // An answer section must never be left with nowhere to write.
+  if (counters.cell + counters.blank + counters.box + counters.ans === 0) {
+    addAnswer(container.lastElementChild, 4, "Your response");
   }
 }
